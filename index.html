@@ -133,10 +133,9 @@ th{background:#f7f8fb;position:sticky;top:0}
   function makePreview(){
     const c=mapCols(), year=$("year").value.trim();
     if(!year) throw new Error("Indique l'année scolaire à traiter.");
-    const eRows=rowsFrom(tables.Table_ecoles).map(r=>({...toCanonical(r,c.e),_id:r._id,IDClasse:get(r,c.e.classId)})).filter(r=>val(r.AnneeScolaire)===year);
+    const eRows=rowsFrom(tables.Table_ecoles).map(r=>({...toCanonical(r,c.e),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
     const vRows=rowsFrom(tables.Table_voeux).map(r=>({...toCanonical(r,c.v),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
     const pRows=rowsFrom(tables.Table_PEAC).map(r=>({...toCanonical(r,c.p),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
-    
     const groups=new Map();
     eRows.forEach(r=>{const k=key(r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
     const seenTeacher=new Set(), assignedIds=new Set(), assignments=[], missing=[], used=[];
@@ -232,7 +231,7 @@ th{background:#f7f8fb;position:sticky;top:0}
           actions.push(["UpdateRecord",vTable,r._id,{[vCols.classId]:Number(a.id)||a.id}]);
         }
       }
-      const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r._id,IDClasse:Number(get(r,eCols.classId))||get(r,eCols.classId)}));
+      const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r._id}));
       const planned=new Map();
       currentSchool.filter(r=>val(r.AnneeScolaire)===p.year).forEach(r=>planned.set(String(r.IDClasse),r));
       for(const a of p.assignments){
@@ -263,16 +262,12 @@ th{background:#f7f8fb;position:sticky;top:0}
         setIf(vals,pCols.school,r.Ecole);
         setIf(vals,pCols.level,r.Niveau);
         setIf(vals,pCols.teacher,r.Enseignant||"Enseignant inconnu");
-        
-        // Alimentation sécurisée de l'IDClasse en format numérique
         if(pCols.classId) vals[pCols.classId] = Number(id) || id;
-        
         setIf(vals,pCols.effectif,v?v.Effectif:"");
         setIf(vals,pCols.code,v?(v.CodeParcours||0):0);
         setIf(vals,pCols.name,v?(v.NomParcours||""):"Pas de parcours demandé");
         setIf(vals,pCols.partner,v?(v.Partenaire||""):"");
         
-        // Règle PasseportMusique convertie en booléen pur (true/false) pour Grist
         if(pCols.passeport){
           const niv = String(r.Niveau||"").trim().toUpperCase();
           vals[pCols.passeport] = ["GS", "CP", "CE1"].includes(niv);
@@ -311,7 +306,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       const years=ycol?(tables.Table_ecoles[ycol]||[]):[];
       const latest=[...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0]||"";
       $("year").value=latest;
-      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».", "ok");
+      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».","ok");
     }).catch(e=>setStatus("connection","Impossible de lire les tables : "+e.message,"error"));
   }catch(e){setStatus("connection","Le widget doit être ouvert dans GRIST : "+e.message,"error");}
 })();
