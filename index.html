@@ -78,4 +78,226 @@ th{background:#f7f8fb;position:sticky;top:0}
   const val = v => v === null || v === undefined ? "" : String(v).trim();
   const key = r => [r.AnneeScolaire,r.Cycle,r.Ecole,r.Niveau].map(x=>val(x).toLocaleLowerCase("fr")).join("|");
   const groupKey = (year,cycle,school,level) => [year,cycle,school,level].map(x=>val(x).toLocaleLowerCase("fr")).join("|");
-  const setStatus = (id,msg,kind="") => { $(id).textContent=msg
+  const setStatus = (id,msg,kind="") => { $(id).textContent=msg; $(id).className="status "+kind; };
+  const candidateMap = {
+    AnneeScolaire:["AnneeScolaire","Année scolaire"], Cycle:["Cycle"], Ecole:["Ecole","École"],
+    Niveau:["Niveau"], Enseignant:["Enseignant"], IDClasse:["IDClasse","ID Classe"],
+    Effectif:["Effectif classe","Effectif_classe","EffectifClasse"], CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
+    NomParcours:["NomParcours","Parcours attribue","Parcours_attribue"], Partenaire:["PartenaireParcours","Partenaire"],
+    Passeport:["Passeport Musique","Passeport_Musique","PasseportMusique"],
+    Cham:["Sensibilisation CHAM/CHAT","Sensibilisation_CHAM_CHAT","SensibilisationCHAMCHAT"],
+    Chorale:["Chorale_CRR93","ChoraleCRR933","Chorale CRR93"], Cinema:["Ecole_Cinema","EcoleCinema","Ecole & Cinéma"],
+    Voeux:["Voeux exprimes","Voeux_exprimes","VoeuxExprimes"]
+  };
+  function findCol(data, names, required=false) {
+    const ids=Object.keys(data).filter(k=>k!=="id");
+    for(const n of names){const found=ids.find(id=>norm(id)===norm(n));if(found)return found;}
+    if(required) throw new Error("Colonne introuvable : "+names[0]);
+    return null;
+  }
+  function rowsFrom(data){const ids=data.id||[];return ids.map((id,i)=>{const r={_id:id};for(const [c,a] of Object.entries(data)){if(c!=="id")r[c]=a[i];}return r;});}
+  function get(r, col){return col ? r[col] : "";}
+  function toCanonical(r, cols){return {
+    AnneeScolaire:get(r,cols.year),Cycle:get(r,cols.cycle),Ecole:get(r,cols.school),Niveau:get(r,cols.level),
+    Enseignant:get(r,cols.teacher),IDClasse:get(r,cols.classId),Effectif:get(r,cols.effectif),
+    CodeParcours:get(r,cols.code),NomParcours:get(r,cols.name),Partenaire:get(r,cols.partner),Voeux:get(r,cols.voeux)
+  };}
+  async function fetchAll(){
+    const names=["Table_ecoles","Table_voeux","Table_PEAC"];
+    for(const n of names) tables[n]=await grist.docApi.fetchTable(n);
+  }
+  async function ensureColumn(tableId, colId, type){
+    const data=tables[tableId];
+    if(!Object.keys(data).some(k=>k!=="id" && norm(k)===norm(colId))){
+      await grist.docApi.applyUserActions([["AddColumn",tableId,colId,{type} ]]);
+      tables[tableId]=await grist.docApi.fetchTable(tableId);
+    }
+  }
+  async function ensureSchema(){
+    // Champs techniques nécessaires à la fusion annuelle et à l'actualisation sans doublons.
+    await ensureColumn("Table_ecoles","IDClasse","Int");
+    await ensureColumn("Table_ecoles","Enseignant","Text");
+    await ensureColumn("Table_voeux","IDClasse","Int");
+    await ensureColumn("Table_PEAC","IDClasse","Int");
+    await ensureColumn("Table_PEAC","Passeport_Musique","Bool");
+    if(!Object.keys(tables.Table_PEAC).some(k=>k!=="id" && ["partenaireparcours","partenaire"].includes(norm(k)))){
+      await ensureColumn("Table_PEAC","PartenaireParcours","Text");
+    }
+  }
+  function mapCols(){
+    const e=tables.Table_ecoles,v=tables.Table_voeux,p=tables.Table_PEAC;
+    return {
+      e:{year:findCol(e,candidateMap.AnneeScolaire,true),cycle:findCol(e,candidateMap.Cycle,true),school:findCol(e,candidateMap.Ecole,true),level:findCol(e,candidateMap.Niveau,true),teacher:findCol(e,candidateMap.Enseignant),classId:findCol(e,candidateMap.IDClasse)},
+      v:{year:findCol(v,candidateMap.AnneeScolaire,true),cycle:findCol(v,candidateMap.Cycle,true),school:findCol(v,candidateMap.Ecole,true),level:findCol(v,candidateMap.Niveau,true),teacher:findCol(v,candidateMap.Enseignant,true),classId:findCol(v,candidateMap.IDClasse),effectif:findCol(v,candidateMap.Effectif),code:findCol(v,candidateMap.CodeParcours),name:findCol(v,candidateMap.NomParcours),partner:findCol(v,candidateMap.Partenaire),voeux:findCol(v,candidateMap.Voeux)},
+      p:{year:findCol(p,candidateMap.AnneeScolaire,true),cycle:findCol(p,candidateMap.Cycle,true),school:findCol(p,candidateMap.Ecole,true),level:findCol(p,candidateMap.Niveau,true),teacher:findCol(p,candidateMap.Enseignant,true),classId:findCol(p,candidateMap.IDClasse),effectif:findCol(p,candidateMap.Effectif),code:findCol(p,candidateMap.CodeParcours),name:findCol(p,candidateMap.NomParcours),partner:findCol(p,["PartenaireParcours","Partenaire"]),passeport:findCol(p,candidateMap.Passeport),cham:findCol(p,candidateMap.Cham),chorale:findCol(p,candidateMap.Chorale),cinema:findCol(p,candidateMap.Cinema),voeux:findCol(p,candidateMap.Voeux)}
+    };
+  }
+  function makePreview(){
+    const c=mapCols(), year=$("year").value.trim();
+    if(!year) throw new Error("Indique l'année scolaire à traiter.");
+    const eRows=rowsFrom(tables.Table_ecoles).map(r=>({...toCanonical(r,c.e),_id:r.id})).filter(r=>val(r.AnneeScolaire)===year);
+    const vRows=rowsFrom(tables.Table_voeux).map(r=>toCanonical(r,c.v)).filter(r=>val(r.AnneeScolaire)===year);
+    const pRows=rowsFrom(tables.Table_PEAC).map(r=>toCanonical(r,c.p)).filter(r=>val(r.AnneeScolaire)===year);
+    const groups=new Map();
+    eRows.forEach(r=>{const k=key(r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
+    const seenTeacher=new Set(), assignedIds=new Set(), assignments=[], missing=[], used=[];
+    // Un enseignant distinct ne consomme qu'une classe, même si sa ligne de vœux est répétée.
+    for(const v of vRows){
+      const teacher=val(v.Enseignant);
+      const tk=key(v)+"|"+teacher.toLocaleLowerCase("fr");
+      if(!teacher || seenTeacher.has(tk)) continue;
+      seenTeacher.add(tk);
+      const candidates=groups.get(key(v))||[];
+      const free=candidates.find(r=>!assignedIds.has(String(r.IDClasse)) && r.IDClasse!=="" && r.IDClasse!==null && r.IDClasse!==undefined);
+      if(free){
+        assignedIds.add(String(free.IDClasse));
+        assignments.push({kind:"existing",row:free,voeu:v,teacher,id:free.IDClasse});
+      } else {
+        missing.push({kind:"missing",voeu:v,teacher});
+      }
+    }
+    // Les lignes restantes du référentiel sont gardées, y compris celles sans vœu.
+    for(const arr of groups.values()) for(const r of arr) if(!assignedIds.has(String(r.IDClasse))) used.push(r);
+    const create=$("createMissing").checked;
+    const legacyPeacRows=pRows.filter(r=>r.IDClasse===null || r.IDClasse===undefined || r.IDClasse==="");
+    const existingPeacIds=new Set(pRows.map(r=>String(r.IDClasse)).filter(Boolean));
+    
+    // Calcul sécurisé des ID de classes (Corrigé)
+    const maxEcoles = Math.max(0, ...rowsFrom(tables.Table_ecoles).map(r => Number(get(r, c.e.classId)) || 0));
+    const maxPeac = Math.max(0, ...rowsFrom(tables.Table_PEAC).map(r => Number(get(r, c.p.classId)) || 0));
+    const newIdBase = Math.max(maxEcoles, maxPeac) + 1;
+    
+    let next=newIdBase;
+    missing.forEach(m=>{if(create){m.id=next++;assignments.push(m);}});
+    // Pour les classes sans vœu, nommage stable par école/niveau.
+    const anonCount=new Map();
+    const orphanRows=used.map(r=>{
+      const g=key(r), n=(anonCount.get(g)||0)+1;anonCount.set(g,n);
+      const label=val(r.Enseignant) || (n===1?"Enseignant inconnu":"Enseignant "+String.fromCharCode(64+n));
+      return {...r,anonymousLabel:label};
+    });
+    return {year,c,assignments,missing,orphanRows,eRows,vRows,pRows,legacyPeacRows,existingPeacIds,create,nextId:next};
+  }
+  function render(){
+    const p=preview; $("summary").classList.remove("hidden");
+    $("mTeachers").textContent=new Set(p.vRows.map(r=>key(r)+"|"+val(r.Enseignant)).filter(x=>!x.endsWith("|"))).size;
+    $("mMatched").textContent=p.assignments.filter(a=>a.kind==="existing").length;
+    $("mCreated").textContent=p.assignments.filter(a=>a.kind==="missing").length;
+    $("mOrphans").textContent=p.orphanRows.length;
+    const issues=[];
+    if(p.missing.length) issues.push(p.missing.length+" enseignant(s) sans classe disponible. "+(p.create?"Une nouvelle ligne sera créée pour chacun.":"Aucune nouvelle ligne ne sera créée : ces cas restent en anomalie."));
+    if(!p.missing.length) issues.push("Aucune classe manquante détectée.");
+    if(p.legacyPeacRows.length) issues.push("ATTENTION : "+p.legacyPeacRows.length+" ligne(s) de cette année existent déjà dans Table_PEAC sans IDClasse. Pour éviter les doublons, l'écriture est bloquée jusqu'à ce que ces lignes soient rapprochées une première fois.");
+    issues.push("Les classes non consommées restent dans le référentiel et seront également présentes dans Table_PEAC.");
+    setStatus("issues",issues.join("\n"),p.missing.length&&!p.create?"error":"");
+    $("assignments").innerHTML="";
+    for(const a of p.assignments){
+      const tr=document.createElement("tr");
+      const id=a.kind==="existing"?a.id:"NOUVEL ID : "+a.id;
+      const action=a.kind==="existing"?"Classe existante verrouillée":"Nouvelle classe à ajouter";
+      [a.voeu.Ecole,a.voeu.Niveau,a.teacher,id,action].forEach((x,i)=>{const td=document.createElement("td");td.textContent=val(x);tr.appendChild(td);});
+      $("assignments").appendChild(tr);
+    }
+    $("orphans").innerHTML="";
+    p.orphanRows.forEach(r=>{const tr=document.createElement("tr");[r.Ecole,r.Niveau,r.anonymousLabel,r.IDClasse].forEach(x=>{const td=document.createElement("td");td.textContent=val(x);tr.appendChild(td);});$("orphans").appendChild(tr);});
+    $("apply").disabled=(p.missing.length>0&&!p.create) || p.legacyPeacRows.length>0;
+  }
+  async function load(){
+    try{setStatus("connection","Lecture des tables GRIST…");await fetchAll();await ensureSchema();await fetchAll();preview=makePreview();render();setStatus("connection","Tables chargées. Vérifie la prévisualisation avant validation.","ok");}
+    catch(e){setStatus("connection",e.message||String(e),"error");$("summary").classList.add("hidden");}
+  }
+  function setIf(obj,col,value){if(col)obj[col]=value;}
+  async function apply(){
+    if(!preview)return;
+    $("apply").disabled=true;setStatus("applyStatus","Écriture dans GRIST en cours…");$("applyStatus").classList.remove("hidden");
+    try{
+      const p=preview,c=p.c, actions=[];
+      const eTable="Table_ecoles", vTable="Table_voeux", peacTable="Table_PEAC";
+      const eRows=rowsFrom(tables[eTable]), vRows=rowsFrom(tables[vTable]), peacRows=rowsFrom(tables[peacTable]);
+      const eCols=c.e,pCols=c.p,vCols=c.v;
+      // Index des classes selon IDClasse pour mettre à jour les références des vœux.
+      const idToSchoolRow=new Map(eRows.map(r=>[String(get(r,eCols.classId)),r]).filter(x=>x[0]!=="undefined"));
+      const assignmentByTeacher=new Map(p.assignments.map(a=>[key(a.voeu)+"|"+a.teacher.toLocaleLowerCase("fr"),a]));
+      for(const a of p.assignments){
+        if(a.kind==="existing"){
+          const row=idToSchoolRow.get(String(a.id));
+          if(row && eCols.teacher) actions.push(["UpdateRecord",eTable,row.id,{[eCols.teacher]:a.teacher}]);
+        } else {
+          const values={[eCols.year]:a.voeu.AnneeScolaire,[eCols.cycle]:a.voeu.Cycle,[eCols.school]:a.voeu.Ecole,[eCols.level]:a.voeu.Niveau};
+          if(eCols.teacher)values[eCols.teacher]=a.teacher;
+          if(eCols.classId)values[eCols.classId]=a.id;
+          actions.push(["AddRecord",eTable,null,values]);
+        }
+      }
+      // Mettre à jour IDClasse dans chaque ligne de vœux (tous les vœux du même enseignant pointent sur la même classe).
+      for(const r of vRows){
+        const cr=toCanonical(r,vCols), a=assignmentByTeacher.get(key(cr)+"|"+val(cr.Enseignant).toLocaleLowerCase("fr"));
+        if(a && vCols.classId) actions.push(["UpdateRecord",vTable,r.id,{[vCols.classId]:a.id}]);
+      }
+      // Construire l'état final des classes : classes existantes, affectations et classes ajoutées.
+      const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r.id}));
+      const planned=new Map();
+      currentSchool.filter(r=>val(r.AnneeScolaire)===p.year).forEach(r=>planned.set(String(r.IDClasse),r));
+      for(const a of p.assignments){
+        if(a.kind==="existing"){
+          const r=planned.get(String(a.id));
+          if(r) r.Enseignant=a.teacher;
+        } else {
+          const values={AnneeScolaire:a.voeu.AnneeScolaire,Cycle:a.voeu.Cycle,Ecole:a.voeu.Ecole,Niveau:a.voeu.Niveau,Enseignant:a.teacher,IDClasse:a.id};
+          planned.set(String(a.id),values);
+        }
+      }
+      // Les classes non consommées restent présentes et reçoivent un libellé anonyme si nécessaire.
+      for(const orphan of p.orphanRows){
+        const r=planned.get(String(orphan.IDClasse));
+        if(r) r.Enseignant=orphan.anonymousLabel;
+        if(orphan._id && eCols.teacher) actions.push(["UpdateRecord",eTable,orphan._id,{[eCols.teacher]:orphan.anonymousLabel}]);
+      }
+      const vById=new Map();
+      for(const a of p.assignments){const k=String(a.id);if(!vById.has(k))vById.set(k,a.voeu);}
+      const peacById=new Map(peacRows.map(r=>[String(get(r,pCols.classId)),r]));
+      const out=[];
+      for(const [id,r] of planned){
+        const v=vById.get(id)||null;
+        const vals={};
+        setIf(vals,pCols.year,r.AnneeScolaire);setIf(vals,pCols.cycle,r.Cycle);setIf(vals,pCols.school,r.Ecole);setIf(vals,pCols.level,r.Niveau);
+        setIf(vals,pCols.teacher,r.Enseignant||"Enseignant inconnu");setIf(vals,pCols.classId,Number(id)||id);
+        setIf(vals,pCols.effectif,v?v.Effectif:"");
+        setIf(vals,pCols.code,v?(v.CodeParcours||0):0);
+        setIf(vals,pCols.name,v?(v.NomParcours||""):"Pas de parcours demandé");
+        setIf(vals,pCols.partner,v?(v.Partenaire||""):"");
+        setIf(vals,pCols.passeport,["GS","CP","CE1"].includes(String(r.Niveau).trim().toUpperCase()));
+        setIf(vals,pCols.cham,undefined);setIf(vals,pCols.chorale,undefined);setIf(vals,pCols.cinema,undefined);
+        setIf(vals,pCols.voeux,v?v.Voeux:"");
+        const existing=peacById.get(id);
+        if(existing) actions.push(["UpdateRecord",peacTable,existing.id,vals]);
+        else actions.push(["AddRecord",peacTable,null,vals]);
+        out.push(id);
+      }
+      if(!actions.length) throw new Error("Aucune modification à appliquer.");
+      await grist.docApi.applyUserActions(actions);
+      setStatus("applyStatus","Terminé. "+p.assignments.length+" affectation(s) traitée(s) ; "+out.length+" ligne(s) de Table_PEAC alimentée(s). Les classes GS, CP et CE1 sont marquées Passeport Musique.","ok");
+      await fetchAll();
+    }catch(e){setStatus("applyStatus","Erreur pendant l'écriture : "+(e.message||String(e)),"error");$("apply").disabled=false;}
+  }
+  $("load").addEventListener("click",load);
+  $("refresh").addEventListener("click",async()=>{await load();});
+  $("apply").addEventListener("click",apply);
+  $("cancel").addEventListener("click",()=>{preview=null;$("summary").classList.add("hidden");});
+  $("createMissing").addEventListener("change",()=>{if(preview){preview=makePreview();render();}});
+  try{
+    grist.ready({requiredAccess:"full"});
+    connected=true;
+    setStatus("connection","Widget connecté à GRIST. Vérification des tables…");
+    fetchAll().then(()=>{
+      const ycol=Object.keys(tables.Table_ecoles).find(k=>k!=="id"&&norm(k)==="anneescolaire");
+      const years=ycol?(tables.Table_ecoles[ycol]||[]):[];
+      const latest=[...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0]||"";
+      $("year").value=latest;
+      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».","ok");
+    }).catch(e=>setStatus("connection","Impossible de lire les tables : "+e.message,"error"));
+  }catch(e){setStatus("connection","Le widget doit être ouvert dans GRIST : "+e.message,"error");}
+})();
+</script>
+</body>
+</html>
