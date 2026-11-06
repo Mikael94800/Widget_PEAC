@@ -134,7 +134,6 @@ th{background:#f7f8fb;position:sticky;top:0}
   function makePreview(){
     const c=mapCols(), year=$("year").value.trim();
     if(!year) throw new Error("Indique l'année scolaire à traiter.");
-    // CORRECTION ICI : Conservation de r._id au lieu de r.id
     const eRows=rowsFrom(tables.Table_ecoles).map(r=>({...toCanonical(r,c.e),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
     const vRows=rowsFrom(tables.Table_voeux).map(r=>({...toCanonical(r,c.v),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
     const pRows=rowsFrom(tables.Table_PEAC).map(r=>({...toCanonical(r,c.p),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
@@ -210,15 +209,15 @@ th{background:#f7f8fb;position:sticky;top:0}
     try{
       const p=preview,c=p.c, actions=[];
       const eTable="Table_ecoles", vTable="Table_voeux", peacTable="Table_PEAC";
-      const eRows=rowsFrom(tables[eTable]), vRows=rowsFrom(tables[vTable]), peacRows=rowsFrom(tables[peacTable]);
+      const vRows=rowsFrom(tables[vTable]), peacRows=rowsFrom(tables[peacTable]);
       const eCols=c.e,pCols=c.p,vCols=c.v;
       
-      const idToSchoolRow=new Map(eRows.map(r=>[String(get(r,eCols.classId)),r]).filter(x=>x[0]!=="undefined"));
       const assignmentByTeacher=new Map(p.assignments.map(a=>[key(a.voeu)+"|"+a.teacher.toLocaleLowerCase("fr"),a]));
       
+      // Utilisation directe de a.row (qui contient déjà l'identifiant Grist _id correct)
       for(const a of p.assignments){
         if(a.kind==="existing"){
-          const row=idToSchoolRow.get(String(a.id));
+          const row=a.row;
           if(row && row._id !== null && row._id !== undefined && eCols.teacher) {
             actions.push(["UpdateRecord",eTable,row._id,{[eCols.teacher]:a.teacher}]);
           }
@@ -261,4 +260,47 @@ th{background:#f7f8fb;position:sticky;top:0}
       for(const [id,r] of planned){
         const v=vById.get(id)||null;
         const vals={};
-        setIf(vals,pCols.year,r.AnneeScolaire);setIf(vals,pCols.cycle,r.Cycle);setIf(vals,pCols.school,
+        setIf(vals,pCols.year,r.AnneeScolaire);setIf(vals,pCols.cycle,r.Cycle);setIf(vals,pCols.school,r.Ecole);setIf(vals,pCols.level,r.Niveau);
+        setIf(vals,pCols.teacher,r.Enseignant||"Enseignant inconnu");setIf(vals,pCols.classId,Number(id)||id);
+        setIf(vals,pCols.effectif,v?v.Effectif:"");
+        setIf(vals,pCols.code,v?(v.CodeParcours||0):0);
+        setIf(vals,pCols.name,v?(v.NomParcours||""):"Pas de parcours demandé");
+        setIf(vals,pCols.partner,v?(v.Partenaire||""):"");
+        setIf(vals,pCols.passeport,["GS","CP","CE1"].includes(String(r.Niveau).trim().toUpperCase()));
+        setIf(vals,pCols.cham,undefined);setIf(vals,pCols.chorale,undefined);setIf(vals,pCols.cinema,undefined);
+        setIf(vals,pCols.voeux,v?v.Voeux:"");
+        const existing=peacById.get(id);
+        if(existing && existing._id !== null && existing._id !== undefined) {
+          actions.push(["UpdateRecord",peacTable,existing._id,vals]);
+        } else {
+          actions.push(["AddRecord",peacTable,null,vals]);
+        }
+        out.push(id);
+      }
+      if(!actions.length) throw new Error("Aucune modification à appliquer.");
+      await grist.docApi.applyUserActions(actions);
+      setStatus("applyStatus","Terminé. "+p.assignments.length+" affectation(s) traitée(s) ; "+out.length+" ligne(s) de Table_PEAC alimentée(s). Les classes GS, CP et CE1 sont marquées Passeport Musique.","ok");
+      await fetchAll();
+    }catch(e){setStatus("applyStatus","Erreur pendant l'écriture : "+(e.message||String(e)),"error");$("apply").disabled=false;}
+  }
+  $("load").addEventListener("click",load);
+  $("refresh").addEventListener("click",async()=>{await load();});
+  $("apply").addEventListener("click",apply);
+  $("cancel").addEventListener("click",()=>{preview=null;$("summary").classList.add("hidden");});
+  $("createMissing").addEventListener("change",()=>{if(preview){preview=makePreview();render();}});
+  try{
+    grist.ready({requiredAccess:"full"});
+    connected=true;
+    setStatus("connection","Widget connecté à GRIST. Vérification des tables…");
+    fetchAll().then(()=>{
+      const ycol=Object.keys(tables.Table_ecoles).find(k=>k!=="id"&&norm(k)==="anneescolaire");
+      const years=ycol?(tables.Table_ecoles[ycol]||[]):[];
+      const latest=[...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0]||"";
+      $("year").value=latest;
+      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».","ok");
+    }).catch(e=>setStatus("connection","Impossible de lire les tables : "+e.message,"error"));
+  }catch(e){setStatus("connection","Le widget doit être ouvert dans GRIST : "+e.message,"error");}
+})();
+</script>
+</body>
+</html>
