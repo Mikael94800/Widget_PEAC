@@ -161,8 +161,9 @@ th{background:#f7f8fb;position:sticky;top:0}
     const create=$("createMissing").checked;
     const legacyPeacRows=pRows.filter(r=>r.IDClasse===null || r.IDClasse===undefined || r.IDClasse==="");
     const existingPeacIds=new Set(pRows.map(r=>String(r.IDClasse)).filter(Boolean));
-    const newIdBase=Math.max(0,...rowsFrom(tables.Table_ecoles).map(r=>Number(get(r,c.e.classId))||0),
-      ...rowsFrom(tables.Table_PEAC).map(r=>Number(get(r,c.p.classId))||0)))+1;
+    const maxEcoles = Math.max(0, ...rowsFrom(tables.Table_ecoles).map(r => Number(get(r, c.e.classId)) || 0));
+const maxPeac = Math.max(0, ...rowsFrom(tables.Table_PEAC).map(r => Number(get(r, c.p.classId)) || 0));
+const newIdBase = Math.max(maxEcoles, maxPeac) + 1;
     let next=newIdBase;
     missing.forEach(m=>{if(create){m.id=next++;assignments.push(m);}});
     // Pour les classes sans vœu, nommage stable par école/niveau.
