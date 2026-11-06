@@ -77,14 +77,13 @@ th{background:#f7f8fb;position:sticky;top:0}
   const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
   const val = v => v === null || v === undefined ? "" : String(v).trim();
   const key = r => [r.AnneeScolaire,r.Cycle,r.Ecole,r.Niveau].map(x=>val(x).toLocaleLowerCase("fr")).join("|");
-  const groupKey = (year,cycle,school,level) => [year,cycle,school,level].map(x=>val(x).toLocaleLowerCase("fr")).join("|");
   const setStatus = (id,msg,kind="") => { $(id).textContent=msg; $(id).className="status "+kind; };
   const candidateMap = {
     AnneeScolaire:["AnneeScolaire","Année scolaire"], Cycle:["Cycle"], Ecole:["Ecole","École"],
     Niveau:["Niveau"], Enseignant:["Enseignant"], IDClasse:["IDClasse","ID Classe"],
     Effectif:["Effectif classe","Effectif_classe","EffectifClasse"], CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
     NomParcours:["NomParcours","Parcours attribue","Parcours_attribue"], Partenaire:["PartenaireParcours","Partenaire"],
-    Passeport:["Passeport Musique","Passeport_Musique","PasseportMusique"],
+    Passeport:["PasseportMusique","Passeport Musique","Passeport_Musique"],
     Cham:["Sensibilisation CHAM/CHAT","Sensibilisation_CHAM_CHAT","SensibilisationCHAMCHAT"],
     Chorale:["Chorale_CRR93","ChoraleCRR933","Chorale CRR93"], Cinema:["Ecole_Cinema","EcoleCinema","Ecole & Cinéma"],
     Voeux:["Voeux exprimes","Voeux_exprimes","VoeuxExprimes"]
@@ -118,7 +117,7 @@ th{background:#f7f8fb;position:sticky;top:0}
     await ensureColumn("Table_ecoles","Enseignant","Text");
     await ensureColumn("Table_voeux","IDClasse","Int");
     await ensureColumn("Table_PEAC","IDClasse","Int");
-    await ensureColumn("Table_PEAC","Passeport_Musique","Bool");
+    await ensureColumn("Table_PEAC","PasseportMusique","Bool");
     if(!Object.keys(tables.Table_PEAC).some(k=>k!=="id" && ["partenaireparcours","partenaire"].includes(norm(k)))){
       await ensureColumn("Table_PEAC","PartenaireParcours","Text");
     }
@@ -134,7 +133,7 @@ th{background:#f7f8fb;position:sticky;top:0}
   function makePreview(){
     const c=mapCols(), year=$("year").value.trim();
     if(!year) throw new Error("Indique l'année scolaire à traiter.");
-    const eRows=rowsFrom(tables.Table_ecoles).map(r=>({...toCanonical(r,c.e),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
+    const eRows=rowsFrom(tables.Table_ecoles).map(r=>({...toCanonical(r,c.e),_id:r._id,IDClasse:get(r,c.e.classId)})).filter(r=>val(r.AnneeScolaire)===year);
     const vRows=rowsFrom(tables.Table_voeux).map(r=>({...toCanonical(r,c.v),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
     const pRows=rowsFrom(tables.Table_PEAC).map(r=>({...toCanonical(r,c.p),_id:r._id})).filter(r=>val(r.AnneeScolaire)===year);
     
@@ -214,7 +213,6 @@ th{background:#f7f8fb;position:sticky;top:0}
       
       const assignmentByTeacher=new Map(p.assignments.map(a=>[key(a.voeu)+"|"+a.teacher.toLocaleLowerCase("fr"),a]));
       
-      // Utilisation directe de a.row (qui contient déjà l'identifiant Grist _id correct)
       for(const a of p.assignments){
         if(a.kind==="existing"){
           const row=a.row;
@@ -224,17 +222,17 @@ th{background:#f7f8fb;position:sticky;top:0}
         } else {
           const values={[eCols.year]:a.voeu.AnneeScolaire,[eCols.cycle]:a.voeu.Cycle,[eCols.school]:a.voeu.Ecole,[eCols.level]:a.voeu.Niveau};
           if(eCols.teacher)values[eCols.teacher]=a.teacher;
-          if(eCols.classId)values[eCols.classId]=a.id;
+          if(eCols.classId)values[eCols.classId]=Number(a.id)||a.id;
           actions.push(["AddRecord",eTable,null,values]);
         }
       }
       for(const r of vRows){
         const cr=toCanonical(r,vCols), a=assignmentByTeacher.get(key(cr)+"|"+val(cr.Enseignant).toLocaleLowerCase("fr"));
         if(a && r._id !== null && r._id !== undefined && vCols.classId) {
-          actions.push(["UpdateRecord",vTable,r._id,{[vCols.classId]:a.id}]);
+          actions.push(["UpdateRecord",vTable,r._id,{[vCols.classId]:Number(a.id)||a.id}]);
         }
       }
-      const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r._id}));
+      const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r._id,IDClasse:Number(get(r,eCols.classId))||get(r,eCols.classId)}));
       const planned=new Map();
       currentSchool.filter(r=>val(r.AnneeScolaire)===p.year).forEach(r=>planned.set(String(r.IDClasse),r));
       for(const a of p.assignments){
@@ -242,7 +240,7 @@ th{background:#f7f8fb;position:sticky;top:0}
           const r=planned.get(String(a.id));
           if(r) r.Enseignant=a.teacher;
         } else {
-          const values={AnneeScolaire:a.voeu.AnneeScolaire,Cycle:a.voeu.Cycle,Ecole:a.voeu.Ecole,Niveau:a.voeu.Niveau,Enseignant:a.teacher,IDClasse:a.id};
+          const values={AnneeScolaire:a.voeu.AnneeScolaire,Cycle:a.voeu.Cycle,Ecole:a.voeu.Ecole,Niveau:a.voeu.Niveau,Enseignant:a.teacher,IDClasse:Number(a.id)||a.id};
           planned.set(String(a.id),values);
         }
       }
@@ -260,15 +258,31 @@ th{background:#f7f8fb;position:sticky;top:0}
       for(const [id,r] of planned){
         const v=vById.get(id)||null;
         const vals={};
-        setIf(vals,pCols.year,r.AnneeScolaire);setIf(vals,pCols.cycle,r.Cycle);setIf(vals,pCols.school,r.Ecole);setIf(vals,pCols.level,r.Niveau);
-        setIf(vals,pCols.teacher,r.Enseignant||"Enseignant inconnu");setIf(vals,pCols.classId,Number(id)||id);
+        setIf(vals,pCols.year,r.AnneeScolaire);
+        setIf(vals,pCols.cycle,r.Cycle);
+        setIf(vals,pCols.school,r.Ecole);
+        setIf(vals,pCols.level,r.Niveau);
+        setIf(vals,pCols.teacher,r.Enseignant||"Enseignant inconnu");
+        
+        // Alimentation sécurisée de l'IDClasse en format numérique
+        if(pCols.classId) vals[pCols.classId] = Number(id) || id;
+        
         setIf(vals,pCols.effectif,v?v.Effectif:"");
         setIf(vals,pCols.code,v?(v.CodeParcours||0):0);
         setIf(vals,pCols.name,v?(v.NomParcours||""):"Pas de parcours demandé");
         setIf(vals,pCols.partner,v?(v.Partenaire||""):"");
-        setIf(vals,pCols.passeport,["GS","CP","CE1"].includes(String(r.Niveau).trim().toUpperCase()));
-        setIf(vals,pCols.cham,undefined);setIf(vals,pCols.chorale,undefined);setIf(vals,pCols.cinema,undefined);
+        
+        // Règle PasseportMusique convertie en booléen pur (true/false) pour Grist
+        if(pCols.passeport){
+          const niv = String(r.Niveau||"").trim().toUpperCase();
+          vals[pCols.passeport] = ["GS", "CP", "CE1"].includes(niv);
+        }
+        
+        setIf(vals,pCols.cham,undefined);
+        setIf(vals,pCols.chorale,undefined);
+        setIf(vals,pCols.cinema,undefined);
         setIf(vals,pCols.voeux,v?v.Voeux:"");
+        
         const existing=peacById.get(id);
         if(existing && existing._id !== null && existing._id !== undefined) {
           actions.push(["UpdateRecord",peacTable,existing._id,vals]);
@@ -297,7 +311,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       const years=ycol?(tables.Table_ecoles[ycol]||[]):[];
       const latest=[...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0]||"";
       $("year").value=latest;
-      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».","ok");
+      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».", "ok");
     }).catch(e=>setStatus("connection","Impossible de lire les tables : "+e.message,"error"));
   }catch(e){setStatus("connection","Le widget doit être ouvert dans GRIST : "+e.message,"error");}
 })();
