@@ -210,13 +210,15 @@ th{background:#f7f8fb;position:sticky;top:0}
       const eTable="Table_ecoles", vTable="Table_voeux", peacTable="Table_PEAC";
       const eRows=rowsFrom(tables[eTable]), vRows=rowsFrom(tables[vTable]), peacRows=rowsFrom(tables[peacTable]);
       const eCols=c.e,pCols=c.p,vCols=c.v;
+      
       const idToSchoolRow=new Map(eRows.map(r=>[String(get(r,eCols.classId)),r]).filter(x=>x[0]!=="undefined"));
       const assignmentByTeacher=new Map(p.assignments.map(a=>[key(a.voeu)+"|"+a.teacher.toLocaleLowerCase("fr"),a]));
+      
       for(const a of p.assignments){
         if(a.kind==="existing"){
           const row=idToSchoolRow.get(String(a.id));
-          if(row && row.id !== null && row.id !== undefined && eCols.teacher) {
-            actions.push(["UpdateRecord",eTable,row.id,{[eCols.teacher]:a.teacher}]);
+          if(row && row._id !== null && row._id !== undefined && eCols.teacher) {
+            actions.push(["UpdateRecord",eTable,row._id,{[eCols.teacher]:a.teacher}]);
           }
         } else {
           const values={[eCols.year]:a.voeu.AnneeScolaire,[eCols.cycle]:a.voeu.Cycle,[eCols.school]:a.voeu.Ecole,[eCols.level]:a.voeu.Niveau};
@@ -227,8 +229,8 @@ th{background:#f7f8fb;position:sticky;top:0}
       }
       for(const r of vRows){
         const cr=toCanonical(r,vCols), a=assignmentByTeacher.get(key(cr)+"|"+val(cr.Enseignant).toLocaleLowerCase("fr"));
-        if(a && r.id !== null && r.id !== undefined && vCols.classId) {
-          actions.push(["UpdateRecord",vTable,r.id,{[vCols.classId]:a.id}]);
+        if(a && r._id !== null && r._id !== undefined && vCols.classId) {
+          actions.push(["UpdateRecord",vTable,r._id,{[vCols.classId]:a.id}]);
         }
       }
       const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r.id}));
@@ -267,8 +269,8 @@ th{background:#f7f8fb;position:sticky;top:0}
         setIf(vals,pCols.cham,undefined);setIf(vals,pCols.chorale,undefined);setIf(vals,pCols.cinema,undefined);
         setIf(vals,pCols.voeux,v?v.Voeux:"");
         const existing=peacById.get(id);
-        if(existing && existing.id !== null && existing.id !== undefined) {
-          actions.push(["UpdateRecord",peacTable,existing.id,vals]);
+        if(existing && existing._id !== null && existing._id !== undefined) {
+          actions.push(["UpdateRecord",peacTable,existing._id,vals]);
         } else {
           actions.push(["AddRecord",peacTable,null,vals]);
         }
@@ -294,7 +296,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       const years=ycol?(tables.Table_ecoles[ycol]||[]):[];
       const latest=[...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0]||"";
       $("year").value=latest;
-      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».","ok");
+      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».", "ok");
     }).catch(e=>setStatus("connection","Impossible de lire les tables : "+e.message,"error"));
   }catch(e){setStatus("connection","Le widget doit être ouvert dans GRIST : "+e.message,"error");}
 })();
