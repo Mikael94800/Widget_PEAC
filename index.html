@@ -231,9 +231,17 @@ th{background:#f7f8fb;position:sticky;top:0}
           actions.push(["UpdateRecord",vTable,r._id,{[vCols.classId]:Number(a.id)||a.id}]);
         }
       }
+      
+      // Collecte de toutes les écoles sans filtre d'année strict pour alimenter Table_PEAC à coup sûr
       const currentSchool=rowsFrom(tables[eTable]).map(r=>({...toCanonical(r,eCols),_id:r._id}));
       const planned=new Map();
-      currentSchool.filter(r=>val(r.AnneeScolaire)===p.year).forEach(r=>planned.set(String(r.IDClasse),r));
+      currentSchool.forEach(r=>{
+        const cid = get(r, eCols.classId);
+        if(cid !== "" && cid !== null && cid !== undefined) {
+          planned.set(String(cid), r);
+        }
+      });
+      
       for(const a of p.assignments){
         if(a.kind==="existing"){
           const r=planned.get(String(a.id));
@@ -257,17 +265,21 @@ th{background:#f7f8fb;position:sticky;top:0}
       for(const [id,r] of planned){
         const v=vById.get(id)||null;
         const vals={};
-        setIf(vals,pCols.year,r.AnneeScolaire);
+        setIf(vals,pCols.year,r.AnneeScolaire || p.year);
         setIf(vals,pCols.cycle,r.Cycle);
         setIf(vals,pCols.school,r.Ecole);
         setIf(vals,pCols.level,r.Niveau);
         setIf(vals,pCols.teacher,r.Enseignant||"Enseignant inconnu");
-        if(pCols.classId) vals[pCols.classId] = Number(id) || id;
+        
+        // IDClasse en format numérique
+        if(pCols.classId) vals[pCols.classId] = Number(id) || Number(r.IDClasse) || id;
+        
         setIf(vals,pCols.effectif,v?v.Effectif:"");
         setIf(vals,pCols.code,v?(v.CodeParcours||0):0);
         setIf(vals,pCols.name,v?(v.NomParcours||""):"Pas de parcours demandé");
         setIf(vals,pCols.partner,v?(v.Partenaire||""):"");
         
+        // PasseportMusique en booléen strict
         if(pCols.passeport){
           const niv = String(r.Niveau||"").trim().toUpperCase();
           vals[pCols.passeport] = ["GS", "CP", "CE1"].includes(niv);
@@ -306,7 +318,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       const years=ycol?(tables.Table_ecoles[ycol]||[]):[];
       const latest=[...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0]||"";
       $("year").value=latest;
-      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».","ok");
+      setStatus("connection","Connecté. Année proposée : "+(latest||"à renseigner")+". Clique sur « Charger et prévisualiser ».", "ok");
     }).catch(e=>setStatus("connection","Impossible de lire les tables : "+e.message,"error"));
   }catch(e){setStatus("connection","Le widget doit être ouvert dans GRIST : "+e.message,"error");}
 })();
