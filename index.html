@@ -233,7 +233,6 @@ th{background:#f7f8fb;position:sticky;top:0}
     }
     
     $("orphans").innerHTML = "";
-    p.orphanRows.formatRow = r => r;
     p.orphanRows.forEach(r => {
       const tr = document.createElement("tr");
       [r.Ecole, r.Niveau, r.anonymousLabel, r.IDClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
@@ -279,7 +278,7 @@ th{background:#f7f8fb;position:sticky;top:0}
           if (eCols.school) values[eCols.school] = a.voeu.Ecole;
           if (eCols.level) values[eCols.level] = a.voeu.Niveau;
           if (eCols.teacher) values[eCols.teacher] = a.teacher;
-          if (eCols.classId) values[eCols.classId] = Number(a.id) || a.id;
+          if (eCols.classId) values[eCols.classId] = String(a.id);
           actions.push(["AddRecord", eTable, null, values]);
         }
       }
@@ -287,7 +286,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       for (const r of vRows) {
         const cr = toCanonical(r, vCols), a = assignmentByTeacher.get(key(cr) + "|" + val(cr.Enseignant).toLocaleLowerCase("fr"));
         if (a && r._id !== null && r._id !== undefined && vCols.classId) {
-          actions.push(["UpdateRecord", vTable, r._id, {[vCols.classId]: Number(a.id) || a.id}]);
+          actions.push(["UpdateRecord", vTable, r._id, {[vCols.classId]: String(a.id)}]);
         }
       }
       
@@ -305,7 +304,7 @@ th{background:#f7f8fb;position:sticky;top:0}
           const r = planned.get(String(a.id));
           if (r) r.Enseignant = a.teacher;
         } else {
-          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, IDClasse: Number(a.id) || a.id, rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
+          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, IDClasse: String(a.id), rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
           planned.set(String(a.id), values);
         }
       }
@@ -333,7 +332,7 @@ th{background:#f7f8fb;position:sticky;top:0}
         if (pCols.level) vals[pCols.level] = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
         
         setIf(vals, pCols.teacher, r.Enseignant || "Enseignant inconnu");
-        if (pCols.classId) vals[pCols.classId] = Number(id) || id;
+        if (pCols.classId) vals[pCols.classId] = String(id);
         
         setIf(vals, pCols.effectif, v ? v.Effectif : "");
         setIf(vals, pCols.code, v ? (v.CodeParcours || 0) : 0);
