@@ -105,4 +105,28 @@ th{background:#f7f8fb;position:sticky;top:0}
   function findCol(data, names, required=false) {
     const ids = Object.keys(data).filter(k => k !== "id");
     for (const n of names) { const found = ids.find(id => norm(id) === norm(n)); if (found) return found; }
-    if (required) throw new Error("Colonne introuvable :
+    if (required) throw new Error("Colonne introuvable : " + names[0]);
+    return null;
+  }
+  const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  
+  function rowsFrom(data) {
+    const ids = data.id || [];
+    return ids.map((id, i) => {
+      const r = {_id: id};
+      for (const [c, a] of Object.entries(data)) { if (c !== "id") r[c] = a[i]; }
+      return r;
+    });
+  }
+  
+  function get(r, col) { return col ? r[col] : ""; }
+  function toCanonical(r, cols) {
+    return {
+      AnneeScolaire: get(r, cols.year), Cycle: get(r, cols.cycle), Ecole: get(r, cols.school), Niveau: get(r, cols.level),
+      Enseignant: get(r, cols.teacher), IDClasse: get(r, cols.classId), Effectif: get(r, cols.effectif),
+      CodeParcours: get(r, cols.code), NomParcours: get(r, cols.name), Partenaire: get(r, cols.partner), Voeux: get(r, cols.voeux)
+    };
+  }
+  
+  async function fetchAll() {
+    const names = ["Table_ecoles", "Table_
