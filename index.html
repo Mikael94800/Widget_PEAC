@@ -129,4 +129,274 @@ th{background:#f7f8fb;position:sticky;top:0}
   }
   
   async function fetchAll() {
-    const names = ["Table_ecoles", "Table_
+    const names = ["Table_ecoles", "Table_voeux", "Table_PEAC"];
+    for (const n of names) tables[n] = await grist.docApi.fetchTable(n);
+  }
+  
+  async function ensureColumn(tableId, colId, type) {
+    const data = tables[tableId];
+    if (!Object.keys(data).some(k => k !== "id" && norm(k) === norm(colId))) {
+      await grist.docApi.applyUserActions([["AddColumn", tableId, colId, {type}]]);
+      tables[tableId] = await grist.docApi.fetchTable(tableId);
+    }
+  }
+  
+  async function ensureSchema() {
+    await ensureColumn("Table_ecoles", "IDClasse", "Int");
+    await ensureColumn("Table_ecoles", "Enseignant", "Text");
+    await ensureColumn("Table_voeux", "IDClasse", "Int");
+    await ensureColumn("Table_PEAC", "IDClasse", "Int");
+    await ensureColumn("Table_PEAC", "PasseportMusique", "Bool");
+    if (!Object.keys(tables.Table_PEAC).some(k => k !== "id" && ["partenaireparcours", "partenaire"].includes(norm(k)))) {
+      await ensureColumn("Table_PEAC", "PartenaireParcours", "Text");
+    }
+  }
+  
+  function mapCols() {
+    const e = tables.Table_ecoles, v = tables.Table_voeux, p = tables.Table_PEAC;
+    return {
+      e: { year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true), school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true), teacher: findCol(e, candidateMap.Enseignant), classId: findCol(e, candidateMap.IDClasse) },
+      v: { year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true), school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true), teacher: findCol(v, candidateMap.Enseignant, true), classId: findCol(v, candidateMap.IDClasse), effectif: findCol(v, candidateMap.Effectif), code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours), partner: findCol(v, candidateMap.Partenaire), voeux: findCol(v, candidateMap.Voeux) },
+      p: { year: findCol(p, candidateMap.AnneeScolaire, true), cycle: findCol(p, candidateMap.Cycle, true), school: findCol(p, candidateMap.Ecole, true), level: findCol(p, candidateMap.Niveau, true), teacher: findCol(p, candidateMap.Enseignant, true), classId: findCol(p, candidateMap.IDClasse), effectif: findCol(p, candidateMap.Effectif), code: findCol(p, candidateMap.CodeParcours), name: findCol(p, candidateMap.NomParcours), partner: findCol(p, ["PartenaireParcours", "Partenaire"]), passeport: findCol(p, candidateMap.Passeport), cham: findCol(p, candidateMap.Cham), chorale: findCol(p, candidateMap.Chorale), cinema: findCol(p, candidateMap.Cinema), voeux: findCol(p, candidateMap.Voeux) }
+    };
+  }
+  
+  function makePreview() {
+    const c = mapCols(), year = $("year").value.trim();
+    if (!year) throw new Error("Indique l'année scolaire à traiter.");
+    
+    const eRows = rowsFrom(tables.Table_ecoles).map(r => ({...toCanonical(r, c.e), _id: r._id, rawEcole: r[c.e.school], rawNiveau: r[c.e.level]})).filter(r => val(r.AnneeScolaire) === year);
+    const vRows = rowsFrom(tables.Table_voeux).map(r => ({...toCanonical(r, c.v), _id: r._id})).filter(r => val(r.AnneeScolaire) === year);
+    const pRows = rowsFrom(tables.Table_PEAC).map(r => ({...toCanonical(r, c.p), _id: r._id})).filter(r => val(r.AnneeScolaire) === year);
+    
+    const groups = new Map();
+    eRows.forEach(r => { const k = key(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+    
+    const seenTeacher = new Set(), assignedIds = new Set(), assignments = [], missing = [], used = [];
+    for (const v of vRows) {
+      const teacher = val(v.Enseignant);
+      const tk = key(v) + "|" + teacher.toLocaleLowerCase("fr");
+      if (!teacher || seenTeacher.has(tk)) continue;
+      seenTeacher.add(tk);
+      const candidates = groups.get(key(v)) || [];
+      const free = candidates.find(r => !assignedIds.has(String(r.IDClasse)) && r.IDClasse !== "" && r.IDClasse !== null && r.IDClasse !== undefined);
+      if (free) {
+        assignedIds.add(String(free.IDClasse));
+        assignments.push({kind: "existing", row: free, voeu: v, teacher, id: free.IDClasse});
+      } else {
+        missing.push({kind: "missing", voeu: v, teacher});
+      }
+    }
+    for (const arr of groups.values()) for (const r of arr) if (!assignedIds.has(String(r.IDClasse))) used.push(r);
+    
+    const create = $("createMissing").checked;
+    const legacyPeacRows = pRows.filter(r => r.IDClasse === null || r.IDClasse === undefined || r.IDClasse === "");
+    const existingPeacIds = new Set(pRows.map(r => String(r.IDClasse)).filter(Boolean));
+    
+    const maxEcoles = Math.max(0, ...rowsFrom(tables.Table_ecoles).map(r => Number(get(r, c.e.classId)) || 0));
+    const maxPeac = Math.max(0, ...rowsFrom(tables.Table_PEAC).map(r => Number(get(r, c.p.classId)) || 0));
+    const newIdBase = Math.max(maxEcoles, maxPeac) + 1;
+    
+    let next = newIdBase;
+    missing.forEach(m => { if (create) { m.id = next++; assignments.push(m); } });
+    
+    const anonCount = new Map();
+    const orphanRows = used.map(r => {
+      const g = key(r), n = (anonCount.get(g) || 0) + 1; anonCount.set(g, n);
+      const label = val(r.Enseignant) || (n === 1 ? "Enseignant inconnu" : "Enseignant " + String.fromCharCode(64 + n));
+      return {...r, anonymousLabel: label};
+    });
+    
+    return {year, c, assignments, missing, orphanRows, eRows, vRows, pRows, legacyPeacRows, existingPeacIds, create, nextId: next};
+  }
+  
+  function render() {
+    const p = preview; $("summary").classList.remove("hidden");
+    $("mTeachers").textContent = new Set(p.vRows.map(r => key(r) + "|" + val(r.Enseignant)).filter(x => !x.endsWith("|"))).size;
+    $("mMatched").textContent = p.assignments.filter(a => a.kind === "existing").length;
+    $("mCreated").textContent = p.assignments.filter(a => a.kind === "missing").length;
+    $("mOrphans").textContent = p.orphanRows.length;
+    
+    const issues = [];
+    if (p.missing.length) issues.push(p.missing.length + " enseignant(s) sans classe disponible. " + (p.create ? "Une nouvelle ligne sera créée pour chacun." : "Aucune nouvelle ligne ne sera créée : ces cas restent en anomalie."));
+    if (!p.missing.length) issues.push("Aucune classe manquante détectée.");
+    if (p.legacyPeacRows.length) issues.push("ATTENTION : " + p.legacyPeacRows.length + " ligne(s) de cette année existent déjà dans Table_PEAC sans IDClasse.");
+    issues.push("Les classes non consommées restent dans le référentiel et seront également présentes dans Table_PEAC.");
+    setStatus("issues", issues.join("\n"), p.missing.length && !p.create ? "error" : "");
+    
+    $("assignments").innerHTML = "";
+    for (const a of p.assignments) {
+      const tr = document.createElement("tr");
+      const id = a.kind === "existing" ? a.id : "NOUVEL ID : " + a.id;
+      const action = a.kind === "existing" ? "Classe existante verrouillée" : "Nouvelle classe à ajouter";
+      [a.voeu.Ecole, a.voeu.Niveau, a.teacher, id, action].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
+      $("assignments").appendChild(tr);
+    }
+    
+    $("orphans").innerHTML = "";
+    p.orphanRows.forEach(r => {
+      const tr = document.createElement("tr");
+      [r.Ecole, r.Niveau, r.anonymousLabel, r.IDClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
+      $("orphans").appendChild(tr);
+    });
+    
+    $("apply").disabled = (p.missing.length > 0 && !p.create) || p.legacyPeacRows.length > 0;
+  }
+  
+  async function load() {
+    try {
+      setStatus("connection", "Lecture des tables GRIST…");
+      await fetchAll(); await ensureSchema(); await fetchAll();
+      preview = makePreview(); render();
+      setStatus("connection", "Tables chargées. Vérifie la prévisualisation avant validation.", "ok");
+    } catch(e) {
+      setStatus("connection", e.message || String(e), "error");
+      $("summary").classList.add("hidden");
+    }
+  }
+  
+  function setIf(obj, col, value) { if (col) obj[col] = value; }
+  
+  async function apply() {
+    if (!preview) return;
+    $("apply").disabled = true; setStatus("applyStatus", "Écriture dans GRIST en cours…"); $("applyStatus").classList.remove("hidden");
+    try {
+      const p = preview, c = p.c, actions = [];
+      const eTable = "Table_ecoles", vTable = "Table_voeux", peacTable = "Table_PEAC";
+      const vRows = rowsFrom(tables[vTable]), peacRows = rowsFrom(tables[peacTable]);
+      const eCols = c.e, pCols = c.p, vCols = c.v;
+      
+      const assignmentByTeacher = new Map(p.assignments.map(a => [key(a.voeu) + "|" + a.teacher.toLocaleLowerCase("fr"), a]));
+      
+      for (const a of p.assignments) {
+        if (a.kind === "existing") {
+          const row = a.row;
+          if (row && row._id !== null && row._id !== undefined && eCols.teacher) {
+            actions.push(["UpdateRecord", eTable, row._id, {[eCols.teacher]: a.teacher}]);
+          }
+        } else {
+          const values = {[eCols.year]: a.voeu.AnneeScolaire, [eCols.cycle]: a.voeu.Cycle};
+          if (eCols.school) values[eCols.school] = a.voeu.Ecole;
+          if (eCols.level) values[eCols.level] = a.voeu.Niveau;
+          if (eCols.teacher) values[eCols.teacher] = a.teacher;
+          if (eCols.classId) values[eCols.classId] = Number(a.id) || a.id;
+          actions.push(["AddRecord", eTable, null, values]);
+        }
+      }
+      
+      for (const r of vRows) {
+        const cr = toCanonical(r, vCols), a = assignmentByTeacher.get(key(cr) + "|" + val(cr.Enseignant).toLocaleLowerCase("fr"));
+        if (a && r._id !== null && r._id !== undefined && vCols.classId) {
+          actions.push(["UpdateRecord", vTable, r._id, {[vCols.classId]: Number(a.id) || a.id}]);
+        }
+      }
+      
+      const rawERows = rowsFrom(tables[eTable]);
+      const currentSchool = rawERows.map(r => ({...toCanonical(r, eCols), _id: r._id, rawEcole: r[eCols.school], rawNiveau: r[eCols.level]}));
+      const planned = new Map();
+      
+      currentSchool.filter(r => val(r.AnneeScolaire) === p.year).forEach(r => {
+        const cid = get(r, eCols.classId);
+        if (cid !== "" && cid !== null && cid !== undefined) planned.set(String(cid), r);
+      });
+      
+      for (const a of p.assignments) {
+        if (a.kind === "existing") {
+          const r = planned.get(String(a.id));
+          if (r) r.Enseignant = a.teacher;
+        } else {
+          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, IDClasse: Number(a.id) || a.id, rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
+          planned.set(String(a.id), values);
+        }
+      }
+      
+      for (const orphan of p.orphanRows) {
+        const r = planned.get(String(orphan.IDClasse));
+        if (r) r.Enseignant = orphan.anonymousLabel;
+        if (orphan._id !== null && orphan._id !== undefined && eCols.teacher) {
+          actions.push(["UpdateRecord", eTable, orphan._id, {[eCols.teacher]: orphan.anonymousLabel}]);
+        }
+      }
+      
+      const vById = new Map();
+      for (const a of p.assignments) { const k = String(a.id); if (!vById.has(k)) vById.set(k, a.voeu); }
+      const peacById = new Map(peacRows.map(r => [String(get(r, pCols.classId)), r]));
+      const out = [];
+      
+      for (const [id, r] of planned) {
+        const v = vById.get(id) || null;
+        const vals = {};
+        
+        setIf(vals, pCols.year, r.AnneeScolaire || p.year);
+        setIf(vals, pCols.cycle, r.Cycle);
+        
+        if (pCols.school) vals[pCols.school] = r.rawEcole !== undefined ? r.rawEcole : r.Ecole;
+        if (pCols.level) vals[pCols.level] = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
+        
+        setIf(vals, pCols.teacher, r.Enseignant || "Enseignant inconnu");
+        if (pCols.classId) vals[pCols.classId] = Number(id) || id;
+        
+        setIf(vals, pCols.effectif, v ? v.Effectif : "");
+        setIf(vals, pCols.code, v ? (v.CodeParcours || 0) : 0);
+        setIf(vals, pCols.name, v ? (v.NomParcours || "") : "Pas de parcours demandé");
+        setIf(vals, pCols.partner, v ? (v.Partenaire || "") : "");
+        
+        if (pCols.passeport) {
+          const nVal = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
+          let levels = [];
+          if (Array.isArray(nVal)) {
+            levels = nVal.map(x => String(x).trim().toUpperCase());
+          } else {
+            levels = String(nVal || "").toUpperCase().split(/[\s,\-]+/).map(x => x.trim()).filter(Boolean);
+          }
+          vals[pCols.passeport] = levels.some(n => ["GS", "CP", "CE1"].includes(n));
+        }
+        
+        setIf(vals, pCols.cham, undefined);
+        setIf(vals, pCols.chorale, undefined);
+        setIf(vals, pCols.cinema, undefined);
+        setIf(vals, pCols.voeux, v ? v.Voeux : "");
+        
+        const existing = peacById.get(id);
+        if (existing && existing._id !== null && existing._id !== undefined) {
+          actions.push(["UpdateRecord", peacTable, existing._id, vals]);
+        } else {
+          actions.push(["AddRecord", peacTable, null, vals]);
+        }
+        out.push(id);
+      }
+      
+      if (!actions.length) throw new Error("Aucune modification à appliquer.");
+      await grist.docApi.applyUserActions(actions);
+      setStatus("applyStatus", "Terminé. " + p.assignments.length + " affectation(s) traitée(s) ; " + out.length + " ligne(s) de Table_PEAC alimentée(s).", "ok");
+      await fetchAll();
+    } catch(e) {
+      setStatus("applyStatus", "Erreur pendant l'écriture : " + (e.message || String(e)), "error");
+      $("apply").disabled = false;
+    }
+  }
+  
+  $("load").addEventListener("click", load);
+  $("refresh").addEventListener("click", async () => { await load(); });
+  $("apply").addEventListener("click", apply);
+  $("cancel").addEventListener("click", () => { preview = null; $("summary").classList.add("hidden"); });
+  $("createMissing").addEventListener("change", () => { if (preview) { preview = makePreview(); render(); } });
+  
+  try {
+    grist.ready({requiredAccess: "full"});
+    connected = true;
+    setStatus("connection", "Widget connecté à GRIST. Vérification des tables…");
+    fetchAll().then(() => {
+      const ycol = Object.keys(tables.Table_ecoles).find(k => k !== "id" && norm(k) === "anneescolaire");
+      const years = ycol ? (tables.Table_ecoles[ycol] || []) : [];
+      const latest = [...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0] || "";
+      $("year").value = latest;
+      setStatus("connection", "Connecté. Année proposée : " + (latest || "à renseigner") + ". Clique sur « Charger et prévisualiser ».", "ok");
+    }).catch(e => setStatus("connection", "Impossible de lire les tables : " + e.message, "error"));
+  } catch(e) {
+    setStatus("connection", "Le widget doit être ouvert dans GRIST : " + e.message, "error");
+  }
+})();
+</script>
+</body>
+</html>
