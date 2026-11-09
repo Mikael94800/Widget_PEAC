@@ -87,7 +87,6 @@ th{background:#f7f8fb;position:sticky;top:0}
     return s;
   };
 
-  // Extrait une valeur textuelle unique (idéal pour les colonnes à choix unique)
   const singleVal = v => {
     if (v === null || v === undefined) return "";
     if (Array.isArray(v)) {
@@ -107,7 +106,7 @@ th{background:#f7f8fb;position:sticky;top:0}
   
   const candidateMap = {
     AnneeScolaire:["AnneeScolaire","Année scolaire"], Cycle:["Cycle"], Ecole:["Ecole","École"],
-    Niveau:["Niveau"], Enseignant:["Enseignant"], RefClasse:["RefClasse","ID Classe"],
+    Niveau:["Niveau"], Enseignant:["Enseignant"], IDClasse:["RefClasse","IDClasse","ID Classe"],
     Effectif:["EffectifsClasse","Effectif classe","Effectif_classe","EffectifClasse","Effectif"], 
     CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
     NomParcours:["NomParcours","Parcours attribue","Parcours_attribue"], Partenaire:["PartenaireParcours","Partenaire"],
@@ -138,7 +137,7 @@ th{background:#f7f8fb;position:sticky;top:0}
   function toCanonical(r, cols) {
     return {
       AnneeScolaire: get(r, cols.year), Cycle: get(r, cols.cycle), Ecole: val(get(r, cols.school)), Niveau: val(get(r, cols.level)),
-      Enseignant: get(r, cols.teacher), RefClasse: get(r, cols.classId), Effectif: get(r, cols.effectif),
+      Enseignant: get(r, cols.teacher), IDClasse: get(r, cols.classId), Effectif: get(r, cols.effectif),
       CodeParcours: get(r, cols.code), NomParcours: get(r, cols.name), Partenaire: get(r, cols.partner), Voeux: get(r, cols.voeux)
     };
   }
@@ -161,10 +160,10 @@ th{background:#f7f8fb;position:sticky;top:0}
   
   async function ensureSchema() {
     const peacTable = "Table_PEAC";
-    await ensureColumn("Table_ecoles", "RefClasse", "Int");
+    await ensureColumn("Table_ecoles", "RefClasse", "Text");
     await ensureColumn("Table_ecoles", "Enseignant", "Text");
-    await ensureColumn("Table_voeux", "RefClasse", "Int");
-    await ensureColumn(peacTable, "RefClasse", "Int");
+    await ensureColumn("Table_voeux", "RefClasse", "Text");
+    await ensureColumn(peacTable, "RefClasse", "Text");
     await ensureColumn(peacTable, "PasseportMusique", "Bool");
     if (!Object.keys(tables[peacTable] || {}).some(k => k !== "id" && ["partenaireparcours", "partenaire"].includes(norm(k)))) {
       await ensureColumn(peacTable, "PartenaireParcours", "Text");
@@ -174,9 +173,9 @@ th{background:#f7f8fb;position:sticky;top:0}
   function mapCols() {
     const e = tables.Table_ecoles, v = tables.Table_voeux, p = tables.Table_PEAC;
     return {
-      e: { year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true), school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true), teacher: findCol(e, candidateMap.Enseignant), classId: findCol(e, candidateMap.RefClasse) },
-      v: { year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true), school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true), teacher: findCol(v, candidateMap.Enseignant, true), classId: findCol(v, candidateMap.RefClasse), effectif: findCol(v, candidateMap.Effectif), code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours), partner: findCol(v, candidateMap.Partenaire), voeux: findCol(v, candidateMap.Voeux) },
-      p: { year: findCol(p, candidateMap.AnneeScolaire, true), cycle: findCol(p, candidateMap.Cycle, true), school: findCol(p, candidateMap.Ecole, true), level: findCol(p, candidateMap.Niveau, true), teacher: findCol(p, candidateMap.Enseignant, true), classId: findCol(p, candidateMap.RefClasse), effectif: findCol(p, candidateMap.Effectif), code: findCol(p, candidateMap.CodeParcours), name: findCol(p, candidateMap.NomParcours), partner: findCol(p, ["PartenaireParcours", "Partenaire"]), passeport: findCol(p, candidateMap.Passeport), cham: findCol(p, candidateMap.Cham), chorale: findCol(p, candidateMap.Chorale), cinema: findCol(p, candidateMap.Cinema), voeux: findCol(p, candidateMap.Voeux) }
+      e: { year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true), school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true), teacher: findCol(e, candidateMap.Enseignant), classId: findCol(e, candidateMap.IDClasse) },
+      v: { year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true), school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true), teacher: findCol(v, candidateMap.Enseignant, true), classId: findCol(v, candidateMap.IDClasse), effectif: findCol(v, candidateMap.Effectif), code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours), partner: findCol(v, candidateMap.Partenaire), voeux: findCol(v, candidateMap.Voeux) },
+      p: { year: findCol(p, candidateMap.AnneeScolaire, true), cycle: findCol(p, candidateMap.Cycle, true), school: findCol(p, candidateMap.Ecole, true), level: findCol(p, candidateMap.Niveau, true), teacher: findCol(p, candidateMap.Enseignant, true), classId: findCol(p, candidateMap.IDClasse), effectif: findCol(p, candidateMap.Effectif), code: findCol(p, candidateMap.CodeParcours), name: findCol(p, candidateMap.NomParcours), partner: findCol(p, ["PartenaireParcours", "Partenaire"]), passeport: findCol(p, candidateMap.Passeport), cham: findCol(p, candidateMap.Cham), chorale: findCol(p, candidateMap.Chorale), cinema: findCol(p, candidateMap.Cinema), voeux: findCol(p, candidateMap.Voeux) }
     };
   }
   
@@ -198,19 +197,19 @@ th{background:#f7f8fb;position:sticky;top:0}
       if (!teacher || seenTeacher.has(tk)) continue;
       seenTeacher.add(tk);
       const candidates = groups.get(key(v)) || [];
-      const free = candidates.find(r => !assignedIds.has(String(r.RefClasse)) && r.RefClasse !== "" && r.RefClasse !== null && r.RefClasse !== undefined);
+      const free = candidates.find(r => !assignedIds.has(String(r.IDClasse)) && r.IDClasse !== "" && r.IDClasse !== null && r.IDClasse !== undefined);
       if (free) {
-        assignedIds.add(String(free.RefClasse));
-        assignments.push({kind: "existing", row: free, voeu: v, teacher, id: free.RefClasse});
+        assignedIds.add(String(free.IDClasse));
+        assignments.push({kind: "existing", row: free, voeu: v, teacher, id: free.IDClasse});
       } else {
         missing.push({kind: "missing", voeu: v, teacher});
       }
     }
-    for (const arr of groups.values()) for (const r of arr) if (!assignedIds.has(String(r.RefClasse))) used.push(r);
+    for (const arr of groups.values()) for (const r of arr) if (!assignedIds.has(String(r.IDClasse))) used.push(r);
     
     const create = $("createMissing").checked;
-    const legacyPeacRows = pRows.filter(r => r.RefClasse === null || r.RefClasse === undefined || r.RefClasse === "");
-    const existingPeacIds = new Set(pRows.map(r => String(r.RefClasse)).filter(Boolean));
+    const legacyPeacRows = pRows.filter(r => r.IDClasse === null || r.IDClasse === undefined || r.IDClasse === "");
+    const existingPeacIds = new Set(pRows.map(r => String(r.IDClasse)).filter(Boolean));
     
     const maxEcoles = Math.max(0, ...rowsFrom(tables.Table_ecoles).map(r => Number(get(r, c.e.classId)) || 0));
     const maxPeac = Math.max(0, ...rowsFrom(tables.Table_PEAC).map(r => Number(get(r, c.p.classId)) || 0));
@@ -252,7 +251,7 @@ th{background:#f7f8fb;position:sticky;top:0}
     $("orphans").innerHTML = "";
     p.orphanRows.forEach(r => {
       const tr = document.createElement("tr");
-      [r.Ecole, r.Niveau, r.anonymousLabel, r.RefClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
+      [r.Ecole, r.Niveau, r.anonymousLabel, r.IDClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
       $("orphans").appendChild(tr);
     });
     
@@ -285,6 +284,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       const assignmentByTeacher = new Map(p.assignments.map(a => [key(a.voeu) + "|" + a.teacher.toLocaleLowerCase("fr"), a]));
       
       for (const a of p.assignments) {
+        const classVal = isNaN(a.id) ? String(a.id) : Number(a.id);
         if (a.kind === "existing") {
           const row = a.row;
           if (row && row._id !== null && row._id !== undefined && eCols.teacher) {
@@ -295,7 +295,7 @@ th{background:#f7f8fb;position:sticky;top:0}
           if (eCols.school) values[eCols.school] = a.voeu.Ecole;
           if (eCols.level) values[eCols.level] = a.voeu.Niveau;
           if (eCols.teacher) values[eCols.teacher] = a.teacher;
-          if (eCols.classId) values[eCols.classId] = String(a.id);
+          if (eCols.classId) values[eCols.classId] = classVal;
           actions.push(["AddRecord", eTable, null, values]);
         }
       }
@@ -303,7 +303,8 @@ th{background:#f7f8fb;position:sticky;top:0}
       for (const r of vRows) {
         const cr = toCanonical(r, vCols), a = assignmentByTeacher.get(key(cr) + "|" + val(cr.Enseignant).toLocaleLowerCase("fr"));
         if (a && r._id !== null && r._id !== undefined && vCols.classId) {
-          actions.push(["UpdateRecord", vTable, r._id, {[vCols.classId]: String(a.id)}]);
+          const classVal = isNaN(a.id) ? String(a.id) : Number(a.id);
+          actions.push(["UpdateRecord", vTable, r._id, {[vCols.classId]: classVal}]);
         }
       }
       
@@ -321,13 +322,13 @@ th{background:#f7f8fb;position:sticky;top:0}
           const r = planned.get(String(a.id));
           if (r) r.Enseignant = a.teacher;
         } else {
-          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, RefClasse: String(a.id), rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
+          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, IDClasse: a.id, rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
           planned.set(String(a.id), values);
         }
       }
       
       for (const orphan of p.orphanRows) {
-        const r = planned.get(String(orphan.RefClasse));
+        const r = planned.get(String(orphan.IDClasse));
         if (r) r.Enseignant = orphan.anonymousLabel;
         if (orphan._id !== null && orphan._id !== undefined && eCols.teacher) {
           actions.push(["UpdateRecord", eTable, orphan._id, {[eCols.teacher]: orphan.anonymousLabel}]);
@@ -346,21 +347,31 @@ th{background:#f7f8fb;position:sticky;top:0}
         setIf(vals, pCols.year, r.AnneeScolaire || p.year);
         setIf(vals, pCols.cycle, r.Cycle);
         
-        // École (Choix unique dans Table_PEAC) -> Extraction d'une valeur textuelle unique propre
+        // École (Choix unique)
         if (pCols.school) {
           const rawSch = r.rawEcole !== undefined ? r.rawEcole : r.Ecole;
           vals[pCols.school] = singleVal(rawSch);
         }
 
-        // Niveau (Choix multiples ou texte)
+        // Niveau : formatage strict sous forme de Tableau (Array) pour Choix multiples
         if (pCols.level) {
-          vals[pCols.level] = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
+          const rawNiv = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
+          if (Array.isArray(rawNiv)) {
+            vals[pCols.level] = rawNiv.map(x => String(x).trim()).filter(x => x && x !== "L");
+          } else if (typeof rawNiv === 'string') {
+            vals[pCols.level] = rawNiv.split(/[,;]+/).map(x => x.trim()).filter(x => x && x !== "L");
+          } else {
+            vals[pCols.level] = rawNiv ? [String(rawNiv).trim()] : [];
+          }
         }
         
         setIf(vals, pCols.teacher, r.Enseignant || "Enseignant inconnu");
         
-        // RefClasse (Texte / Numérique)
-        if (pCols.classId) vals[pCols.classId] = String(id);
+        // RefClasse (Identifiant de classe)
+        if (pCols.classId) {
+          const rawId = id !== null && id !== undefined && id !== "" ? String(id).trim() : "";
+          vals[pCols.classId] = rawId !== "" ? (isNaN(rawId) ? rawId : Number(rawId)) : null;
+        }
         
         // EffectifsClasse
         setIf(vals, pCols.effectif, v ? v.Effectif : "");
