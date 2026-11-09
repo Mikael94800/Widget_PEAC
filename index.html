@@ -129,11 +129,14 @@ th{background:#f7f8fb;position:sticky;top:0}
   
   async function fetchAll() {
     const names = ["Table_ecoles", "Table_voeux", "Table_PEAC"];
-    for (const n of names) tables[n] = await grist.docApi.fetchTable(n);
+    for (const n of names) {
+      tables[n] = await grist.docApi.fetchTable(n);
+    }
   }
   
   async function ensureColumn(tableId, colId, type) {
     const data = tables[tableId];
+    if (!data) return;
     if (!Object.keys(data).some(k => k !== "id" && norm(k) === norm(colId))) {
       await grist.docApi.applyUserActions([["AddColumn", tableId, colId, {type}]]);
       tables[tableId] = await grist.docApi.fetchTable(tableId);
@@ -141,13 +144,14 @@ th{background:#f7f8fb;position:sticky;top:0}
   }
   
   async function ensureSchema() {
+    const peacTable = "Table_PEAC";
     await ensureColumn("Table_ecoles", "IDClasse", "Int");
     await ensureColumn("Table_ecoles", "Enseignant", "Text");
     await ensureColumn("Table_voeux", "IDClasse", "Int");
-    await ensureColumn("Table_PEAC", "IDClasse", "Int");
-    await ensureColumn("Table_PEAC", "PasseportMusique", "Bool");
-    if (!Object.keys(tables.Table_PEAC).some(k => k !== "id" && ["partenaireparcours", "partenaire"].includes(norm(k)))) {
-      await ensureColumn("Table_PEAC", "PartenaireParcours", "Text");
+    await ensureColumn(peacTable, "IDClasse", "Int");
+    await ensureColumn(peacTable, "PasseportMusique", "Bool");
+    if (!Object.keys(tables[peacTable] || {}).some(k => k !== "id" && ["partenaireparcours", "partenaire"].includes(norm(k)))) {
+      await ensureColumn(peacTable, "PartenaireParcours", "Text");
     }
   }
   
@@ -357,7 +361,7 @@ th{background:#f7f8fb;position:sticky;top:0}
         peacCount++;
       }
       
-      console.log("Actions totales envoyées à Grist :", actions);
+      console.log("Cible officielle : Table_PEAC. Actions totales :", actions);
       if (!actions.length) throw new Error("Aucune modification à appliquer.");
       
       await grist.docApi.applyUserActions(actions);
@@ -381,11 +385,11 @@ th{background:#f7f8fb;position:sticky;top:0}
     connected = true;
     setStatus("connection", "Widget connecté à GRIST. Vérification des tables…");
     fetchAll().then(() => {
-      const ycol = Object.keys(tables.Table_ecoles).find(k => k !== "id" && norm(k) === "anneescolaire");
+      const ycol = Object.keys(tables.Table_ecoles || {}).find(k => k !== "id" && norm(k) === "anneescolaire");
       const years = ycol ? (tables.Table_ecoles[ycol] || []) : [];
-      const latest = [...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0] || "";
+      const latest = [...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0] || "2026-2027";
       $("year").value = latest;
-      setStatus("connection", "Connecté. Année proposée : " + (latest || "à renseigner") + ". Clique sur « Charger et prévisualiser ».", "ok");
+      setStatus("connection", "Connecté. Année proposée : " + latest + ". Clique sur « Charger et prévisualiser ».", "ok");
     }).catch(e => setStatus("connection", "Impossible de lire les tables : " + e.message, "error"));
   } catch(e) {
     setStatus("connection", "Le widget doit être ouvert dans GRIST : " + e.message, "error");
