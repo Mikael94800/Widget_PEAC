@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Consolidation annuelle PEAC</title>
+<title>Consolidation directe dans Table_ecoles</title>
 <script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
 <style>
 :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#172033;background:#f5f7fb}
@@ -25,104 +25,85 @@ table{border-collapse:collapse;width:100%;font-size:.88rem;margin-top:10px}
 th,td{text-align:left;padding:8px;border-bottom:1px solid #e5e9f0;vertical-align:top}
 th{background:#f7f8fb;position:sticky;top:0}
 .tablewrap{max-height:390px;overflow:auto}
-.pill{display:inline-block;border-radius:20px;padding:2px 8px;font-size:.78rem;background:#e8edf5}
-.pill.warn{background:#fff2d6;color:#805400}.pill.bad{background:#ffe4e4;color:#9b1c1c}
-.check{display:flex;gap:8px;align-items:center;font-weight:500;margin:12px 0}
-.check input{min-width:auto}
-.small{font-size:.82rem}.hidden{display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Consolidation annuelle PEAC</h1>
-  <div class="muted">Rapproche <b>Table_ecoles</b> et <b>Table_voeux</b>, puis prépare <b>Table_PEAC</b>. Le traitement commence par une prévisualisation : aucune donnée n'est modifiée avant validation.</div>
+  <h1>Affectation directe dans Table_ecoles</h1>
+  <div class="muted">Associe les vœux des enseignants aux classes prévisionnelles de <b>Table_ecoles</b>. Aucune donnée n'est modifiée avant la validation.</div>
 
   <section class="panel">
     <div class="controls">
       <div><label for="year">Année scolaire à traiter</label><input id="year" placeholder="2026-2027"></div>
       <button id="load">Charger et prévisualiser</button>
-      <button id="refresh" class="secondary">Actualiser les données</button>
+      <button id="refresh" class="secondary">Actualiser</button>
     </div>
     <div id="connection" class="status">Connexion à GRIST en cours…</div>
-    <div class="small muted">Les classes de Table_ecoles servent de base maîtresse. Les vœux y sont rattachés pour alimenter Table_PEAC sans dupliquer les écoles.</div>
   </section>
 
   <section id="summary" class="panel hidden">
     <div class="grid">
-      <div class="metric"><b id="mTeachers">0</b><span>enseignants avec vœux</span></div>
-      <div class="metric"><b id="mMatched">0</b><span>classes rapprochées</span></div>
-      <div class="metric"><b id="mCreated">0</b><span>nouvelles classes proposées</span></div>
+      <div class="metric"><b id="mTeachers">0</b><span>enseignants à placer</span></div>
+      <div class="metric"><b id="mMatched">0</b><span>classes affectées</span></div>
       <div class="metric"><b id="mOrphans">0</b><span>classes sans vœu</span></div>
+      <div class="metric"><b id="mMissing">0</b><span>enseignants sans classe libre</span></div>
     </div>
     <div id="issues" class="status"></div>
-    <h3>Affectations proposées</h3>
-    <div class="tablewrap"><table><thead><tr><th>École</th><th>Niveau</th><th>Enseignant</th><th>RefClasse</th><th>Action</th></tr></thead><tbody id="assignments"></tbody></table></div>
-    <h3>Classes conservées sans vœu</h3>
-    <div class="tablewrap"><table><thead><tr><th>École</th><th>Niveau</th><th>Enseignant dans Table_ecoles</th><th>RefClasse</th></tr></thead><tbody id="orphans"></tbody></table></div>
+    
+    <h3>Rapprochements proposés</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>École</th>
+            <th>Niveau</th>
+            <th>Enseignant affecté</th>
+            <th>Parcours attribué</th>
+            <th>Passeport Musique</th>
+          </tr>
+        </thead>
+        <tbody id="assignments"></tbody>
+      </table>
+    </div>
+
     <div class="controls" style="margin-top:16px">
-      <button id="apply" disabled>Valider et alimenter les tables</button>
-      <button id="cancel" class="secondary">Effacer la prévisualisation</button>
+      <button id="apply" disabled>Mettre à jour Table_ecoles</button>
+      <button id="cancel" class="secondary">Annuler</button>
     </div>
     <div id="applyStatus" class="status hidden"></div>
   </section>
 </div>
+
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  let connected = false, preview = null, tables = {};
+  let preview = null, tables = {};
   
   const val = v => {
     if (v === null || v === undefined) return "";
-    if (Array.isArray(v)) {
-      return v.map(x => String(x).trim()).filter(x => x && x !== "L").sort().join(", ");
-    }
+    if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(x => x && x !== "L").sort().join(", ");
     const s = String(v).trim();
-    if (s.startsWith("L,")) {
-      return s.substring(2).split(",").map(x => x.trim()).filter(Boolean).join(", ");
-    }
-    return s;
+    return s.startsWith("L,") ? s.substring(2).split(",").map(x => x.trim()).filter(Boolean).join(", ") : s;
   };
 
-  const singleVal = v => {
-    if (v === null || v === undefined) return "";
-    if (Array.isArray(v)) {
-      const cleanArr = v.map(x => String(x).trim()).filter(x => x && x !== "L");
-      return cleanArr[0] || "";
-    }
-    const s = String(v).trim();
-    if (s.startsWith("L,")) {
-      const parts = s.substring(2).split(",").map(x => x.trim()).filter(Boolean);
-      return parts[0] || "";
-    }
-    return s;
-  };
-
-  // Convertit proprement un niveau en Tableau (Array) pour les choix multiples Grist
   const parseLevelArray = (nVal) => {
-    if (Array.isArray(nVal)) {
-      return nVal.map(x => String(x).trim()).filter(x => x && x !== "L");
-    }
+    if (Array.isArray(nVal)) return nVal.map(x => String(x).trim()).filter(x => x && x !== "L");
     const s = String(nVal || "").trim();
-    if (s.startsWith("L,")) {
-      return s.substring(2).split(",").map(x => x.trim()).filter(Boolean);
-    }
-    if (s.includes(",")) {
-      return s.split(",").map(x => x.trim()).filter(Boolean);
-    }
-    return s ? [s] : [];
+    if (s.startsWith("L,")) return s.substring(2).split(",").map(x => x.trim()).filter(Boolean);
+    return s.includes(",") ? s.split(",").map(x => x.trim()).filter(Boolean) : (s ? [s] : []);
   };
   
   const key = r => [r.AnneeScolaire, r.Cycle, r.Ecole, r.Niveau].map(x => val(x).toLocaleLowerCase("fr")).join("|");
   const setStatus = (id, msg, kind="") => { $(id).textContent = msg; $(id).className = "status " + kind; };
-  
+  const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+
   const candidateMap = {
     AnneeScolaire:["AnneeScolaire","Année scolaire"], Cycle:["Cycle"], Ecole:["Ecole","École"],
-    Niveau:["Niveau"], Enseignant:["Enseignant"], IDClasse:["RefClasse","IDClasse","ID Classe"],
+    Niveau:["Niveau"], Enseignant:["Enseignant"],
     Effectif:["EffectifsClasse","Effectif classe","Effectif_classe","EffectifClasse","Effectif"], 
     CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
     NomParcours:["NomParcours","Parcours attribue","Parcours_attribue"], Partenaire:["PartenaireParcours","Partenaire"],
-    Passeport:["PasseportMusique","Passeport Musique","Passeport_Musique"],
-    Voeux:["Voeux exprimes","Voeux_exprimes","VoeuxExprimes"]
+    Passeport:["PasseportMusique","Passeport Musique"]
   };
   
   function findCol(data, names, required=false) {
@@ -131,7 +112,6 @@ th{background:#f7f8fb;position:sticky;top:0}
     if (required) throw new Error("Colonne introuvable : " + names[0]);
     return null;
   }
-  const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
   
   function rowsFrom(data) {
     const ids = data.id || [];
@@ -143,48 +123,29 @@ th{background:#f7f8fb;position:sticky;top:0}
   }
   
   function get(r, col) { return col ? r[col] : ""; }
-  function toCanonical(r, cols) {
-    return {
-      AnneeScolaire: get(r, cols.year), Cycle: get(r, cols.cycle), Ecole: val(get(r, cols.school)), Niveau: val(get(r, cols.level)),
-      Enseignant: get(r, cols.teacher), IDClasse: get(r, cols.classId), Effectif: get(r, cols.effectif),
-      CodeParcours: get(r, cols.code), NomParcours: get(r, cols.name), Partner: get(r, cols.partner), Voeux: get(r, cols.voeux)
-    };
-  }
   
   async function fetchAll() {
-    const names = ["Table_ecoles", "Table_voeux", "Table_PEAC"];
-    for (const n of names) {
-      tables[n] = await grist.docApi.fetchTable(n);
-    }
+    tables.Table_ecoles = await grist.docApi.fetchTable("Table_ecoles");
+    tables.Table_voeux = await grist.docApi.fetchTable("Table_voeux");
   }
-  
-  async function ensureColumn(tableId, colId, type) {
-    const data = tables[tableId];
-    if (!data) return;
-    if (!Object.keys(data).some(k => k !== "id" && norm(k) === norm(colId))) {
-      await grist.docApi.applyUserActions([["AddColumn", tableId, colId, {type}]]);
-      tables[tableId] = await grist.docApi.fetchTable(tableId);
-    }
-  }
-  
-  async function ensureSchema() {
-    const peacTable = "Table_PEAC";
-    await ensureColumn("Table_ecoles", "RefClasse", "Text");
-    await ensureColumn("Table_ecoles", "Enseignant", "Text");
-    await ensureColumn("Table_voeux", "RefClasse", "Text");
-    await ensureColumn(peacTable, "RefClasse", "Text");
-    await ensureColumn(peacTable, "PasseportMusique", "Bool");
-    if (!Object.keys(tables[peacTable] || {}).some(k => k !== "id" && ["partenaireparcours", "partenaire"].includes(norm(k)))) {
-      await ensureColumn(peacTable, "PartenaireParcours", "Text");
-    }
-  }
-  
+
   function mapCols() {
-    const e = tables.Table_ecoles, v = tables.Table_voeux, p = tables.Table_PEAC;
+    const e = tables.Table_ecoles, v = tables.Table_voeux;
     return {
-      e: { year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true), school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true), teacher: findCol(e, candidateMap.Enseignant), classId: findCol(e, candidateMap.IDClasse) },
-      v: { year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true), school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true), teacher: findCol(v, candidateMap.Enseignant, true), classId: findCol(v, candidateMap.IDClasse), effectif: findCol(v, candidateMap.Effectif), code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours), partner: findCol(v, candidateMap.Partenaire), voeux: findCol(v, candidateMap.Voeux) },
-      p: { year: findCol(p, candidateMap.AnneeScolaire, true), cycle: findCol(p, candidateMap.Cycle, true), school: findCol(p, candidateMap.Ecole, true), level: findCol(p, candidateMap.Niveau, true), teacher: findCol(p, candidateMap.Enseignant, true), classId: findCol(p, candidateMap.IDClasse), effectif: findCol(p, candidateMap.Effectif), code: findCol(p, candidateMap.CodeParcours), name: findCol(p, candidateMap.NomParcours), partner: findCol(p, ["PartenaireParcours", "Partenaire"]), passeport: findCol(p, candidateMap.Passeport), cham: findCol(p, candidateMap.Cham), chorale: findCol(p, candidateMap.Chorale), cinema: findCol(p, candidateMap.Cinema), voeux: findCol(p, candidateMap.Voeux) }
+      e: {
+        year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true),
+        school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true),
+        teacher: findCol(e, candidateMap.Enseignant), effectif: findCol(e, candidateMap.Effectif),
+        code: findCol(e, candidateMap.CodeParcours), name: findCol(e, candidateMap.NomParcours),
+        partner: findCol(e, candidateMap.Partenaire), passeport: findCol(e, candidateMap.Passeport)
+      },
+      v: {
+        year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true),
+        school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true),
+        teacher: findCol(v, candidateMap.Enseignant, true), effectif: findCol(v, candidateMap.Effectif),
+        code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours),
+        partner: findCol(v, candidateMap.Partenaire)
+      }
     };
   }
   
@@ -192,202 +153,158 @@ th{background:#f7f8fb;position:sticky;top:0}
     const c = mapCols(), year = $("year").value.trim();
     if (!year) throw new Error("Indique l'année scolaire à traiter.");
     
-    const eRows = rowsFrom(tables.Table_ecoles).map(r => ({...toCanonical(r, c.e), _id: r._id, rawEcole: r[c.e.school], rawNiveau: r[c.e.level]})).filter(r => val(r.AnneeScolaire) === year);
-    const vRows = rowsFrom(tables.Table_voeux).map(r => ({...toCanonical(r, c.v), _id: r._id})).filter(r => val(r.AnneeScolaire) === year);
-    const pRows = rowsFrom(tables.Table_PEAC).map(r => ({...toCanonical(r, c.p), _id: r._id})).filter(r => val(r.AnneeScolaire) === year);
+    const eRows = rowsFrom(tables.Table_ecoles).map(r => ({
+      _id: r._id,
+      AnneeScolaire: get(r, c.e.year), Cycle: get(r, c.e.cycle), Ecole: val(get(r, c.e.school)),
+      Niveau: val(get(r, c.e.level)), rawNiveau: r[c.e.level], Enseignant: val(get(r, c.e.teacher))
+    })).filter(r => val(r.AnneeScolaire) === year);
     
-    const groups = new Map();
-    eRows.forEach(r => { const k = key(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
-    
-    const seenTeacher = new Set(), assignedIds = new Set(), assignments = [], missing = [], used = [];
+    const vRows = rowsFrom(tables.Table_voeux).map(r => ({
+      _id: r._id,
+      AnneeScolaire: get(r, c.v.year), Cycle: get(r, c.v.cycle), Ecole: val(get(r, c.v.school)),
+      Niveau: val(get(r, c.v.level)), Enseignant: val(get(r, c.v.teacher)),
+      CodeParcours: get(r, c.v.code), NomParcours: get(r, c.v.name), Partenaire: get(r, c.v.partner)
+    })).filter(r => val(r.AnneeScolaire) === year);
+
+    // Groupement des lignes prévisionnelles de Table_ecoles par [Année|Cycle|École|Niveau]
+    const availableSlots = new Map();
+    eRows.forEach(r => {
+      const k = key(r);
+      if (!availableSlots.has(k)) availableSlots.set(k, []);
+      availableSlots.get(k).push(r);
+    });
+
+    const updates = [];
+    const usedRecordIds = new Set();
+    const missingClasses = [];
+
+    // Rapprochement Enseignant de Table_voeux -> Ligne disponible dans Table_ecoles
     for (const v of vRows) {
-      const teacher = val(v.Enseignant);
-      const tk = key(v) + "|" + teacher.toLocaleLowerCase("fr");
-      if (!teacher || seenTeacher.has(tk)) continue;
-      seenTeacher.add(tk);
-      const candidates = groups.get(key(v)) || [];
-      const free = candidates.find(r => !assignedIds.has(String(r.IDClasse)) && r.IDClasse !== "" && r.IDClasse !== null && r.IDClasse !== undefined);
-      if (free) {
-        assignedIds.add(String(free.IDClasse));
-        assignments.push({kind: "existing", row: free, voeu: v, teacher, id: free.IDClasse});
+      const k = key(v);
+      const slots = availableSlots.get(k) || [];
+      const freeSlot = slots.find(s => !usedRecordIds.has(s._id));
+
+      if (freeSlot) {
+        usedRecordIds.add(freeSlot._id);
+        
+        // Calcul Passeport Musique (GS, CP, CE1)
+        const levels = parseLevelArray(freeSlot.rawNiveau).map(x => x.toUpperCase());
+        const isPasseport = levels.some(n => ["GS", "CP", "CE1"].includes(n));
+
+        updates.push({
+          targetId: freeSlot._id,
+          school: freeSlot.Ecole,
+          level: freeSlot.Niveau,
+          teacher: v.Enseignant,
+          code: v.CodeParcours || 0,
+          name: v.NomParcours || "Pas de parcours demandé",
+          partner: v.Partenaire || "",
+          passeport: isPasseport
+        });
       } else {
-        missing.push({kind: "missing", voeu: v, teacher});
+        missingClasses.push(v);
       }
     }
-    for (const arr of groups.values()) for (const r of arr) if (!assignedIds.has(String(r.IDClasse))) used.push(r);
-    
-    const anonCount = new Map();
-    const orphanRows = used.map(r => {
-      const g = key(r), n = (anonCount.get(g) || 0) + 1; anonCount.set(g, n);
-      const label = val(r.Enseignant) || (n === 1 ? "Enseignant inconnu" : "Enseignant " + String.fromCharCode(64 + n));
-      return {...r, anonymousLabel: label};
+
+    // Gestion des classes orphelines dans Table_ecoles (sans vœu rattaché)
+    const orphans = eRows.filter(r => !usedRecordIds.has(r._id));
+    orphans.forEach(o => {
+      const levels = parseLevelArray(o.rawNiveau).map(x => x.toUpperCase());
+      const isPasseport = levels.some(n => ["GS", "CP", "CE1"].includes(n));
+      updates.push({
+        targetId: o._id,
+        school: o.Ecole,
+        level: o.Niveau,
+        teacher: o.Enseignant || "Enseignant inconnu",
+        code: 0,
+        name: "Pas de parcours demandé",
+        partner: "",
+        passeport: isPasseport
+      });
     });
-    
-    return {year, c, assignments, missing, orphanRows, eRows, vRows, pRows};
+
+    return { year, c, updates, matchedCount: vRows.length - missingClasses.length, orphansCount: orphans.length, missingClasses, vRowsCount: vRows.length };
   }
   
   function render() {
     const p = preview; $("summary").classList.remove("hidden");
-    $("mTeachers").textContent = new Set(p.vRows.map(r => key(r) + "|" + val(r.Enseignant)).filter(x => !x.endsWith("|"))).size;
-    $("mMatched").textContent = p.assignments.filter(a => a.kind === "existing").length;
-    $("mCreated").textContent = 0;
-    $("mOrphans").textContent = p.orphanRows.length;
-    
-    $("assignments").innerHTML = "";
-    for (const a of p.assignments) {
-      const tr = document.createElement("tr");
-      [a.voeu.Ecole, a.voeu.Niveau, a.teacher, a.id, "Classe associée"].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
-      $("assignments").appendChild(tr);
+    $("mTeachers").textContent = p.vRowsCount;
+    $("mMatched").textContent = p.matchedCount;
+    $("mOrphans").textContent = p.orphansCount;
+    $("mMissing").textContent = p.missingClasses.length;
+
+    if (p.missingClasses.length) {
+      setStatus("issues", p.missingClasses.length + " enseignant(s) n'ont pas trouvé de classe prévisionnelle disponible.", "warn");
+    } else {
+      setStatus("issues", "Toutes les affectations ont trouvé une classe prévisionnelle disponible.", "ok");
     }
-    
-    $("orphans").innerHTML = "";
-    p.orphanRows.forEach(r => {
+
+    $("assignments").innerHTML = "";
+    p.updates.forEach(u => {
       const tr = document.createElement("tr");
-      [r.Ecole, r.Niveau, r.anonymousLabel, r.IDClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
-      $("orphans").appendChild(tr);
+      [u.school, u.level, u.teacher, u.name, u.passeport ? "Oui" : "Non"].forEach(x => {
+        const td = document.createElement("td");
+        td.textContent = x;
+        tr.appendChild(td);
+      });
+      $("assignments").appendChild(tr);
     });
-    
+
     $("apply").disabled = false;
   }
   
   async function load() {
     try {
       setStatus("connection", "Lecture des tables GRIST…");
-      await fetchAll(); await ensureSchema(); await fetchAll();
-      preview = makePreview(); render();
-      setStatus("connection", "Tables chargées. Vérifie la prévisualisation avant validation.", "ok");
+      await fetchAll();
+      preview = makePreview();
+      render();
+      setStatus("connection", "Prêt pour la mise à jour de Table_ecoles.", "ok");
     } catch(e) {
       setStatus("connection", e.message || String(e), "error");
       $("summary").classList.add("hidden");
     }
   }
-  
+
   async function apply() {
     if (!preview) return;
-    $("apply").disabled = true; setStatus("applyStatus", "Mise à jour des enseignants dans Table_ecoles et peuplement de Table_PEAC…"); $("applyStatus").classList.remove("hidden");
+    $("apply").disabled = true;
+    setStatus("applyStatus", "Mise à jour directe de Table_ecoles en cours…");
+    $("applyStatus").classList.remove("hidden");
+
     try {
       const p = preview, c = p.c, actions = [];
-      const eTable = "Table_ecoles", vTable = "Table_voeux", peacTable = "Table_PEAC";
-      const vRows = rowsFrom(tables[vTable]), peacRows = rowsFrom(tables[peacTable]);
-      const eCols = c.e, pCols = c.p, vCols = c.v;
-      
-      const assignmentByTeacher = new Map(p.assignments.map(a => [key(a.voeu) + "|" + a.teacher.toLocaleLowerCase("fr"), a]));
-      
-      // 1. Met à jour uniquement le nom des enseignants dans Table_ecoles pour les classes appariées
-      for (const a of p.assignments) {
-        if (a.kind === "existing") {
-          const row = a.row;
-          if (row && row._id !== null && row._id !== undefined && eCols.teacher) {
-            actions.push(["UpdateRecord", eTable, row._id, {[eCols.teacher]: a.teacher}]);
-          }
-        }
-      }
-      
-      // 2. Met à jour l'IDClasse (RefClasse) dans Table_voeux
-      for (const r of vRows) {
-        const cr = toCanonical(r, vCols), a = assignmentByTeacher.get(key(cr) + "|" + val(cr.Enseignant).toLocaleLowerCase("fr"));
-        if (a && r._id !== null && r._id !== undefined && vCols.classId) {
-          const classVal = isNaN(a.id) ? String(a.id) : Number(a.id);
-          actions.push(["UpdateRecord", vTable, r._id, {[vCols.classId]: classVal}]);
-        }
-      }
-      
-      // 3. Met à jour les enseignants anonymes pour les classes sans vœu (orphelines)
-      for (const orphan of p.orphanRows) {
-        if (orphan._id !== null && orphan._id !== undefined && eCols.teacher) {
-          actions.push(["UpdateRecord", eTable, orphan._id, {[eCols.teacher]: orphan.anonymousLabel}]);
-        }
-      }
-      
-      // 4. Construction de la table PEAC basée strictement sur TOUTES les lignes maîtresse de Table_ecoles de l'année
-      const rawERows = rowsFrom(tables[eTable]).filter(r => val(get(r, eCols.year)) === p.year);
-      const vById = new Map();
-      for (const a of p.assignments) { const k = String(a.id); if (!vById.has(k)) vById.set(k, a.voeu); }
-      const peacById = new Map(peacRows.map(r => [String(get(r, pCols.classId)), r]));
-      
-      let peacCount = 0;
-      for (const r of rawERows) {
-        const id = get(r, eCols.classId);
-        if (id === null || id === undefined || id === "") continue; // Ignore les lignes sans ID
-        
-        const stringId = String(id);
-        const v = vById.get(stringId) || null;
-        const vals = {};
-        
-        setIf(vals, pCols.year, p.year);
-        setIf(vals, pCols.cycle, get(r, eCols.cycle));
-        
-        // École (Choix unique)
-        if (pCols.school) {
-          vals[pCols.school] = singleVal(get(r, eCols.school));
-        }
+      const eTable = "Table_ecoles";
 
-        // Niveau : formatage strict en Tableau pour Choix multiples
-        if (pCols.level) {
-          vals[pCols.level] = parseLevelArray(get(r, eCols.level));
-        }
-        
-        setIf(vals, pCols.teacher, get(r, eCols.teacher) || "Enseignant inconnu");
-        
-        // RefClasse
-        if (pCols.classId) {
-          vals[pCols.classId] = isNaN(stringId) ? stringId : Number(stringId);
-        }
-        
-        // EffectifsClasse
-        setIf(vals, pCols.effectif, v ? v.Effectif : "");
+      for (const u of p.updates) {
+        const fields = {};
+        if (c.e.teacher) fields[c.e.teacher] = u.teacher;
+        if (c.e.code) fields[c.e.code] = u.code;
+        if (c.e.name) fields[c.e.name] = u.name;
+        if (c.e.partner) fields[c.e.partner] = u.partner;
+        if (c.e.passeport) fields[c.e.passeport] = u.passeport;
 
-        setIf(vals, pCols.code, v ? (v.CodeParcours || 0) : 0);
-        setIf(vals, pCols.name, v ? (v.NomParcours || "") : "Pas de parcours demandé");
-        setIf(vals, pCols.partner, v ? (v.Partenaire || "") : "");
-        
-        if (pCols.passeport) {
-          const levels = parseLevelArray(get(r, eCols.level)).map(x => x.toUpperCase());
-          vals[pCols.passeport] = levels.some(n => ["GS", "CP", "CE1"].includes(n));
-        }
-        
-        const existing = peacById.get(stringId);
-        if (existing && existing._id !== null && existing._id !== undefined) {
-          actions.push(["UpdateRecord", peacTable, existing._id, vals]);
-        } else {
-          actions.push(["AddRecord", peacTable, null, vals]);
-        }
-        peacCount++;
+        actions.push(["UpdateRecord", eTable, u.targetId, fields]);
       }
-      
-      console.log("Actions totales exécutées :", actions);
-      if (!actions.length) throw new Error("Aucune modification à appliquer.");
-      
+
       await grist.docApi.applyUserActions(actions);
-      setStatus("applyStatus", "Terminé avec succès ! " + peacCount + " classes synchronisées dans Table_PEAC.", "ok");
+      setStatus("applyStatus", "Succès ! " + p.updates.length + " classes directement mises à jour dans Table_ecoles.", "ok");
       await fetchAll();
     } catch(e) {
-      console.error("Erreur critique apply :", e);
-      setStatus("applyStatus", "Erreur pendant l'écriture : " + (e.message || String(e)), "error");
+      setStatus("applyStatus", "Erreur lors de la mise à jour : " + (e.message || String(e)), "error");
       $("apply").disabled = false;
     }
   }
   
   $("load").addEventListener("click", load);
-  $("refresh").addEventListener("click", async () => { await load(); });
+  $("refresh").addEventListener("click", load);
   $("apply").addEventListener("click", apply);
   $("cancel").addEventListener("click", () => { preview = null; $("summary").classList.add("hidden"); });
   
   try {
     grist.ready({requiredAccess: "full"});
-    connected = true;
-    setStatus("connection", "Widget connecté à GRIST. Vérification des tables…");
+    setStatus("connection", "Widget connecté à GRIST.");
     fetchAll().then(() => {
       const ycol = Object.keys(tables.Table_ecoles || {}).find(k => k !== "id" && norm(k) === "anneescolaire");
       const years = ycol ? (tables.Table_ecoles[ycol] || []) : [];
-      const latest = [...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0] || "2026-2027";
-      $("year").value = latest;
-      setStatus("connection", "Connecté. Année proposée : " + latest + ". Clique sur « Charger et prévisualiser ».", "ok");
-    }).catch(e => setStatus("connection", "Impossible de lire les tables : " + e.message, "error"));
-  } catch(e) {
-    setStatus("connection", "Le widget doit être ouvert dans GRIST : " + e.message, "error");
-  }
-})();
-</script>
-</body>
-</html>
+      const latest = [...new Set(years.filter(Boolean).map(String))].sort().slice(-1)[0] || "20
