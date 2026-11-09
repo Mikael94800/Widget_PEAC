@@ -45,7 +45,7 @@ th{background:#f7f8fb;position:sticky;top:0}
     </div>
     <div id="connection" class="status">Connexion à GRIST en cours…</div>
     <label class="check"><input type="checkbox" id="createMissing" checked> Ajouter automatiquement dans Table_ecoles une ligne pour chaque enseignant sans classe disponible</label>
-    <div class="small muted">Les classes existantes sont affectées dans l'ordre des lignes de Table_ecoles. Les enseignants sont traités dans l'ordre de leurs lignes dans Table_voeux. Chaque IDClasse n'est attribué qu'une seule fois.</div>
+    <div class="small muted">Les classes existantes sont affectées dans l'ordre des lignes de Table_ecoles. Les enseignants sont traités dans l'ordre de leurs lignes dans Table_voeux. Chaque RefClasse n'est attribué qu'une seule fois.</div>
   </section>
 
   <section id="summary" class="panel hidden">
@@ -57,9 +57,9 @@ th{background:#f7f8fb;position:sticky;top:0}
     </div>
     <div id="issues" class="status"></div>
     <h3>Affectations proposées</h3>
-    <div class="tablewrap"><table><thead><tr><th>École</th><th>Niveau</th><th>Enseignant</th><th>IDClasse</th><th>Action</th></tr></thead><tbody id="assignments"></tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>École</th><th>Niveau</th><th>Enseignant</th><th>RefClasse</th><th>Action</th></tr></thead><tbody id="assignments"></tbody></table></div>
     <h3>Classes conservées sans vœu</h3>
-    <div class="tablewrap"><table><thead><tr><th>École</th><th>Niveau</th><th>Enseignant dans Table_ecoles</th><th>IDClasse</th></tr></thead><tbody id="orphans"></tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>École</th><th>Niveau</th><th>Enseignant dans Table_ecoles</th><th>RefClasse</th></tr></thead><tbody id="orphans"></tbody></table></div>
     <div class="controls" style="margin-top:16px">
       <button id="apply" disabled>Valider et alimenter les tables</button>
       <button id="cancel" class="secondary">Effacer la prévisualisation</button>
@@ -107,7 +107,7 @@ th{background:#f7f8fb;position:sticky;top:0}
   
   const candidateMap = {
     AnneeScolaire:["AnneeScolaire","Année scolaire"], Cycle:["Cycle"], Ecole:["Ecole","École"],
-    Niveau:["Niveau"], Enseignant:["Enseignant"], IDClasse:["IDClasse","ID Classe"],
+    Niveau:["Niveau"], Enseignant:["Enseignant"], RefClasse:["RefClasse","ID Classe"],
     Effectif:["EffectifsClasse","Effectif classe","Effectif_classe","EffectifClasse","Effectif"], 
     CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
     NomParcours:["NomParcours","Parcours attribue","Parcours_attribue"], Partenaire:["PartenaireParcours","Partenaire"],
@@ -138,7 +138,7 @@ th{background:#f7f8fb;position:sticky;top:0}
   function toCanonical(r, cols) {
     return {
       AnneeScolaire: get(r, cols.year), Cycle: get(r, cols.cycle), Ecole: val(get(r, cols.school)), Niveau: val(get(r, cols.level)),
-      Enseignant: get(r, cols.teacher), IDClasse: get(r, cols.classId), Effectif: get(r, cols.effectif),
+      Enseignant: get(r, cols.teacher), RefClasse: get(r, cols.classId), Effectif: get(r, cols.effectif),
       CodeParcours: get(r, cols.code), NomParcours: get(r, cols.name), Partenaire: get(r, cols.partner), Voeux: get(r, cols.voeux)
     };
   }
@@ -161,10 +161,10 @@ th{background:#f7f8fb;position:sticky;top:0}
   
   async function ensureSchema() {
     const peacTable = "Table_PEAC";
-    await ensureColumn("Table_ecoles", "IDClasse", "Int");
+    await ensureColumn("Table_ecoles", "RefClasse", "Int");
     await ensureColumn("Table_ecoles", "Enseignant", "Text");
-    await ensureColumn("Table_voeux", "IDClasse", "Int");
-    await ensureColumn(peacTable, "IDClasse", "Int");
+    await ensureColumn("Table_voeux", "RefClasse", "Int");
+    await ensureColumn(peacTable, "RefClasse", "Int");
     await ensureColumn(peacTable, "PasseportMusique", "Bool");
     if (!Object.keys(tables[peacTable] || {}).some(k => k !== "id" && ["partenaireparcours", "partenaire"].includes(norm(k)))) {
       await ensureColumn(peacTable, "PartenaireParcours", "Text");
@@ -174,9 +174,9 @@ th{background:#f7f8fb;position:sticky;top:0}
   function mapCols() {
     const e = tables.Table_ecoles, v = tables.Table_voeux, p = tables.Table_PEAC;
     return {
-      e: { year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true), school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true), teacher: findCol(e, candidateMap.Enseignant), classId: findCol(e, candidateMap.IDClasse) },
-      v: { year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true), school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true), teacher: findCol(v, candidateMap.Enseignant, true), classId: findCol(v, candidateMap.IDClasse), effectif: findCol(v, candidateMap.Effectif), code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours), partner: findCol(v, candidateMap.Partenaire), voeux: findCol(v, candidateMap.Voeux) },
-      p: { year: findCol(p, candidateMap.AnneeScolaire, true), cycle: findCol(p, candidateMap.Cycle, true), school: findCol(p, candidateMap.Ecole, true), level: findCol(p, candidateMap.Niveau, true), teacher: findCol(p, candidateMap.Enseignant, true), classId: findCol(p, candidateMap.IDClasse), effectif: findCol(p, candidateMap.Effectif), code: findCol(p, candidateMap.CodeParcours), name: findCol(p, candidateMap.NomParcours), partner: findCol(p, ["PartenaireParcours", "Partenaire"]), passeport: findCol(p, candidateMap.Passeport), cham: findCol(p, candidateMap.Cham), chorale: findCol(p, candidateMap.Chorale), cinema: findCol(p, candidateMap.Cinema), voeux: findCol(p, candidateMap.Voeux) }
+      e: { year: findCol(e, candidateMap.AnneeScolaire, true), cycle: findCol(e, candidateMap.Cycle, true), school: findCol(e, candidateMap.Ecole, true), level: findCol(e, candidateMap.Niveau, true), teacher: findCol(e, candidateMap.Enseignant), classId: findCol(e, candidateMap.RefClasse) },
+      v: { year: findCol(v, candidateMap.AnneeScolaire, true), cycle: findCol(v, candidateMap.Cycle, true), school: findCol(v, candidateMap.Ecole, true), level: findCol(v, candidateMap.Niveau, true), teacher: findCol(v, candidateMap.Enseignant, true), classId: findCol(v, candidateMap.RefClasse), effectif: findCol(v, candidateMap.Effectif), code: findCol(v, candidateMap.CodeParcours), name: findCol(v, candidateMap.NomParcours), partner: findCol(v, candidateMap.Partenaire), voeux: findCol(v, candidateMap.Voeux) },
+      p: { year: findCol(p, candidateMap.AnneeScolaire, true), cycle: findCol(p, candidateMap.Cycle, true), school: findCol(p, candidateMap.Ecole, true), level: findCol(p, candidateMap.Niveau, true), teacher: findCol(p, candidateMap.Enseignant, true), classId: findCol(p, candidateMap.RefClasse), effectif: findCol(p, candidateMap.Effectif), code: findCol(p, candidateMap.CodeParcours), name: findCol(p, candidateMap.NomParcours), partner: findCol(p, ["PartenaireParcours", "Partenaire"]), passeport: findCol(p, candidateMap.Passeport), cham: findCol(p, candidateMap.Cham), chorale: findCol(p, candidateMap.Chorale), cinema: findCol(p, candidateMap.Cinema), voeux: findCol(p, candidateMap.Voeux) }
     };
   }
   
@@ -198,19 +198,19 @@ th{background:#f7f8fb;position:sticky;top:0}
       if (!teacher || seenTeacher.has(tk)) continue;
       seenTeacher.add(tk);
       const candidates = groups.get(key(v)) || [];
-      const free = candidates.find(r => !assignedIds.has(String(r.IDClasse)) && r.IDClasse !== "" && r.IDClasse !== null && r.IDClasse !== undefined);
+      const free = candidates.find(r => !assignedIds.has(String(r.RefClasse)) && r.RefClasse !== "" && r.RefClasse !== null && r.RefClasse !== undefined);
       if (free) {
-        assignedIds.add(String(free.IDClasse));
-        assignments.push({kind: "existing", row: free, voeu: v, teacher, id: free.IDClasse});
+        assignedIds.add(String(free.RefClasse));
+        assignments.push({kind: "existing", row: free, voeu: v, teacher, id: free.RefClasse});
       } else {
         missing.push({kind: "missing", voeu: v, teacher});
       }
     }
-    for (const arr of groups.values()) for (const r of arr) if (!assignedIds.has(String(r.IDClasse))) used.push(r);
+    for (const arr of groups.values()) for (const r of arr) if (!assignedIds.has(String(r.RefClasse))) used.push(r);
     
     const create = $("createMissing").checked;
-    const legacyPeacRows = pRows.filter(r => r.IDClasse === null || r.IDClasse === undefined || r.IDClasse === "");
-    const existingPeacIds = new Set(pRows.map(r => String(r.IDClasse)).filter(Boolean));
+    const legacyPeacRows = pRows.filter(r => r.RefClasse === null || r.RefClasse === undefined || r.RefClasse === "");
+    const existingPeacIds = new Set(pRows.map(r => String(r.RefClasse)).filter(Boolean));
     
     const maxEcoles = Math.max(0, ...rowsFrom(tables.Table_ecoles).map(r => Number(get(r, c.e.classId)) || 0));
     const maxPeac = Math.max(0, ...rowsFrom(tables.Table_PEAC).map(r => Number(get(r, c.p.classId)) || 0));
@@ -252,7 +252,7 @@ th{background:#f7f8fb;position:sticky;top:0}
     $("orphans").innerHTML = "";
     p.orphanRows.forEach(r => {
       const tr = document.createElement("tr");
-      [r.Ecole, r.Niveau, r.anonymousLabel, r.IDClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
+      [r.Ecole, r.Niveau, r.anonymousLabel, r.RefClasse].forEach(x => { const td = document.createElement("td"); td.textContent = val(x); tr.appendChild(td); });
       $("orphans").appendChild(tr);
     });
     
@@ -321,13 +321,13 @@ th{background:#f7f8fb;position:sticky;top:0}
           const r = planned.get(String(a.id));
           if (r) r.Enseignant = a.teacher;
         } else {
-          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, IDClasse: String(a.id), rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
+          const values = {AnneeScolaire: a.voeu.AnneeScolaire, Cycle: a.voeu.Cycle, Ecole: a.voeu.Ecole, Niveau: a.voeu.Niveau, Enseignant: a.teacher, RefClasse: String(a.id), rawEcole: a.voeu.Ecole, rawNiveau: a.voeu.Niveau};
           planned.set(String(a.id), values);
         }
       }
       
       for (const orphan of p.orphanRows) {
-        const r = planned.get(String(orphan.IDClasse));
+        const r = planned.get(String(orphan.RefClasse));
         if (r) r.Enseignant = orphan.anonymousLabel;
         if (orphan._id !== null && orphan._id !== undefined && eCols.teacher) {
           actions.push(["UpdateRecord", eTable, orphan._id, {[eCols.teacher]: orphan.anonymousLabel}]);
@@ -359,7 +359,7 @@ th{background:#f7f8fb;position:sticky;top:0}
         
         setIf(vals, pCols.teacher, r.Enseignant || "Enseignant inconnu");
         
-        // IDClasse (Texte / Numérique)
+        // RefClasse (Texte / Numérique)
         if (pCols.classId) vals[pCols.classId] = String(id);
         
         // EffectifsClasse
