@@ -217,11 +217,8 @@ th{background:#f7f8fb;position:sticky;top:0}
     $("mOrphans").textContent = p.orphanRows.length;
     
     const issues = [];
-    if (p.missing.length) issues.push(p.missing.length + " enseignant(s) sans classe disponible. " + (p.create ? "Une nouvelle ligne sera créée pour chacun." : "Aucune nouvelle ligne ne sera créée : ces cas restent en anomalie."));
-    if (!p.missing.length) issues.push("Aucune classe manquante détectée.");
-    if (p.legacyPeacRows.length) issues.push("ATTENTION : " + p.legacyPeacRows.length + " ligne(s) de cette année existent déjà dans Table_PEAC sans IDClasse.");
-    issues.push("Les classes non consommées restent dans le référentiel et seront également présentes dans Table_PEAC.");
-    setStatus("issues", issues.join("\n"), p.missing.length && !p.create ? "error" : "");
+    if (p.missing.length) issues.push(p.missing.length + " enseignant(s) sans classe disponible. " + (p.create ? "Une nouvelle ligne sera créée pour chacun." : ""));
+    setStatus("issues", issues.join("\n"), "");
     
     $("assignments").innerHTML = "";
     for (const a of p.assignments) {
@@ -239,7 +236,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       $("orphans").appendChild(tr);
     });
     
-    $("apply").disabled = (p.missing.length > 0 && !p.create) || p.legacyPeacRows.length > 0;
+    $("apply").disabled = false;
   }
   
   async function load() {
@@ -321,6 +318,7 @@ th{background:#f7f8fb;position:sticky;top:0}
       for (const a of p.assignments) { const k = String(a.id); if (!vById.has(k)) vById.set(k, a.voeu); }
       const peacById = new Map(peacRows.map(r => [String(get(r, pCols.classId)), r]));
       
+      let peacCount = 0;
       for (const [id, r] of planned) {
         const v = vById.get(id) || null;
         const vals = {};
@@ -350,27 +348,23 @@ th{background:#f7f8fb;position:sticky;top:0}
           vals[pCols.passeport] = levels.some(n => ["GS", "CP", "CE1"].includes(n));
         }
         
-        setIf(vals, pCols.cham, undefined);
-        setIf(vals, pCols.chorale, undefined);
-        setIf(vals, pCols.cinema, undefined);
-        setIf(vals, pCols.voeux, v ? v.Voeux : "");
-        
         const existing = peacById.get(id);
         if (existing && existing._id !== null && existing._id !== undefined) {
           actions.push(["UpdateRecord", peacTable, existing._id, vals]);
         } else {
           actions.push(["AddRecord", peacTable, null, vals]);
         }
+        peacCount++;
       }
       
-      console.log("Actions finales envoyées à Grist :", actions);
+      console.log("Actions totales envoyées à Grist :", actions);
       if (!actions.length) throw new Error("Aucune modification à appliquer.");
       
       await grist.docApi.applyUserActions(actions);
-      setStatus("applyStatus", "Terminé avec succès ! Table_PEAC alimentée.", "ok");
+      setStatus("applyStatus", "Terminé avec succès ! " + p.assignments.length + " affectations et " + peacCount + " lignes traitées dans Table_PEAC.", "ok");
       await fetchAll();
     } catch(e) {
-      console.error("Erreur lors de l'écriture :", e);
+      console.error("Erreur critique apply :", e);
       setStatus("applyStatus", "Erreur pendant l'écriture : " + (e.message || String(e)), "error");
       $("apply").disabled = false;
     }
