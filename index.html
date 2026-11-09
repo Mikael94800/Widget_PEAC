@@ -86,6 +86,21 @@ th{background:#f7f8fb;position:sticky;top:0}
     }
     return s;
   };
+
+  // Extrait une valeur textuelle unique (idéal pour les colonnes à choix unique)
+  const singleVal = v => {
+    if (v === null || v === undefined) return "";
+    if (Array.isArray(v)) {
+      const cleanArr = v.map(x => String(x).trim()).filter(x => x && x !== "L");
+      return cleanArr[0] || "";
+    }
+    const s = String(v).trim();
+    if (s.startsWith("L,")) {
+      const parts = s.substring(2).split(",").map(x => x.trim()).filter(Boolean);
+      return parts[0] || "";
+    }
+    return s;
+  };
   
   const key = r => [r.AnneeScolaire, r.Cycle, r.Ecole, r.Niveau].map(x => val(x).toLocaleLowerCase("fr")).join("|");
   const setStatus = (id, msg, kind="") => { $(id).textContent = msg; $(id).className = "status " + kind; };
@@ -93,7 +108,8 @@ th{background:#f7f8fb;position:sticky;top:0}
   const candidateMap = {
     AnneeScolaire:["AnneeScolaire","Année scolaire"], Cycle:["Cycle"], Ecole:["Ecole","École"],
     Niveau:["Niveau"], Enseignant:["Enseignant"], IDClasse:["IDClasse","ID Classe"],
-    Effectif:["Effectif classe","Effectif_classe","EffectifClasse"], CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
+    Effectif:["EffectifsClasse","Effectif classe","Effectif_classe","EffectifClasse","Effectif"], 
+    CodeParcours:["CodeParcours","Code attribue","Code_attribue"],
     NomParcours:["NomParcours","Parcours attribue","Parcours_attribue"], Partenaire:["PartenaireParcours","Partenaire"],
     Passeport:["PasseportMusique","Passeport Musique","Passeport_Musique"],
     Cham:["Sensibilisation CHAM/CHAT","Sensibilisation_CHAM_CHAT","SensibilisationCHAMCHAT"],
@@ -330,13 +346,25 @@ th{background:#f7f8fb;position:sticky;top:0}
         setIf(vals, pCols.year, r.AnneeScolaire || p.year);
         setIf(vals, pCols.cycle, r.Cycle);
         
-        if (pCols.school) vals[pCols.school] = r.rawEcole !== undefined ? r.rawEcole : r.Ecole;
-        if (pCols.level) vals[pCols.level] = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
+        // École (Choix unique dans Table_PEAC) -> Extraction d'une valeur textuelle unique propre
+        if (pCols.school) {
+          const rawSch = r.rawEcole !== undefined ? r.rawEcole : r.Ecole;
+          vals[pCols.school] = singleVal(rawSch);
+        }
+
+        // Niveau (Choix multiples ou texte)
+        if (pCols.level) {
+          vals[pCols.level] = r.rawNiveau !== undefined ? r.rawNiveau : r.Niveau;
+        }
         
         setIf(vals, pCols.teacher, r.Enseignant || "Enseignant inconnu");
+        
+        // IDClasse (Texte / Numérique)
         if (pCols.classId) vals[pCols.classId] = String(id);
         
+        // EffectifsClasse
         setIf(vals, pCols.effectif, v ? v.Effectif : "");
+
         setIf(vals, pCols.code, v ? (v.CodeParcours || 0) : 0);
         setIf(vals, pCols.name, v ? (v.NomParcours || "") : "Pas de parcours demandé");
         setIf(vals, pCols.partner, v ? (v.Partenaire || "") : "");
