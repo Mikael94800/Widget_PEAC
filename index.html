@@ -30,7 +30,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
   <div id="review" class="panel hidden">
     <h3>Prévisualisation des modifications</h3>
     <p id="reviewText"></p>
-    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
     <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
     <button id="back">Revenir aux choix</button>
     <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
@@ -131,7 +131,11 @@ function showAmbiguity(i){
  const box=$("ambChoices");box.innerHTML="";
  const options=assignments.filter(x=>a.candidates.includes(x.row._id)&&!x.teacher.startsWith("Enseignant inconnu")&&!x._reserved);
  // Candidates are filtered dynamically by prior validated decisions.
- const available=assignments.filter(x=>a.candidates.includes(x.row._id)&&!ambiguities.some((b,j)=>j!==i&&decisions[j]===x.row._id));
+ const available=assignments.filter(x=>
+  a.candidates.some(id=>String(id)===String(x.row._id)) &&
+  x.source!=="Correspondance exacte" &&
+  !ambiguities.some((b,j)=>j!==i && decisions[j]!==undefined && String(decisions[j])===String(x.row._id))
+ );
  available.forEach(x=>{
   const label=document.createElement("label"),radio=document.createElement("input");
   radio.type="radio";radio.name="choice";radio.value=x.row._id;
@@ -163,7 +167,7 @@ function showReview(){
  $("rows").innerHTML="";
  assignments.forEach(a=>{
   const tr=document.createElement("tr");
-  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
+  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
   $("rows").append(tr);
  });
  $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
