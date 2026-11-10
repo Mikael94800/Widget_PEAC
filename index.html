@@ -2,126 +2,189 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Diagnostic de lecture GRIST</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
+<title>Module_fusion</title>
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;padding:20px;background:#f5f7fb;color:#172033}
-  main{max-width:850px;margin:auto}h1{font-size:1.4rem}.panel{background:white;border:1px solid #dce2ec;border-radius:12px;padding:16px;margin:14px 0}
-  .status{padding:12px;border-radius:8px;background:#eef2ff;white-space:pre-wrap}.ok{background:#ecfdf3;color:#17643a}.err{background:#fff0f0;color:#8b1e1e}
-  button{font:inherit;padding:9px 14px;border:0;border-radius:8px;background:#1d4ed8;color:white;cursor:pointer}button:disabled{opacity:.5}
-  table{border-collapse:collapse;width:100%;margin-top:10px}td,th{text-align:left;padding:7px;border-bottom:1px solid #e5e9f0;font-size:.9rem;overflow-wrap:anywhere}
-  .muted{color:#596579;font-size:.9rem}.step{margin:8px 0;padding:10px;background:#f7f8fb;border-radius:8px}
+body{font:14px system-ui, sans-serif;margin:18px;color:#222}h2{margin:0 0 10px}
+button{padding:8px 13px;margin:5px 5px 5px 0;cursor:pointer;border:1px solid #aaa;border-radius:6px;background:#f7f7f7}
+button.primary{background:#185abc;color:white;border-color:#185abc}button:disabled{opacity:.4;cursor:not-allowed}
+.panel{padding:12px;border:1px solid #ddd;border-radius:8px;margin:12px 0}
+.status{padding:9px;background:#f2f5f8;border-radius:6px;white-space:pre-wrap}
+.small{color:#555;font-size:12px}.choices label{display:block;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;text-align:left;padding:6px}
+.hidden{display:none}.warn{color:#9b4b00}.good{color:#176b35}
 </style>
 </head>
-<body><main>
-<h1>Diagnostic de lecture GRIST</h1>
-<p class="muted">Ce widget ne modifie aucune donnée. Il teste uniquement la connexion et la lecture de <b>Table_ecoles</b> et <b>Table_voeux</b>.</p>
-<section class="panel">
-  <div id="connection" class="status">Initialisation du widget…</div>
-  <div id="steps"></div>
-  <p><button id="retry" disabled>Relancer le test de lecture</button></p>
-</section>
-<section class="panel">
-  <h2>Résultats</h2>
-  <table><thead><tr><th>Table</th><th>Résultat</th><th>Nombre de lignes</th><th>Colonnes détectées</th></tr></thead><tbody id="results"><tr><td colspan="4">En attente du test…</td></tr></tbody></table>
-</section>
-<section class="panel">
-  <h2>Détails techniques</h2><pre id="details" style="white-space:pre-wrap;overflow-wrap:anywhere">Aucun résultat pour le moment.</pre>
-</section>
-</main>
+<body>
+<h2>Fusion des vœux vers les classes</h2>
+<div id="status" class="status">Connexion à GRIST…</div>
+<div id="app" class="hidden">
+  <div id="summary" class="panel"></div>
+  <div id="ambiguity" class="panel hidden">
+    <strong id="ambTitle"></strong>
+    <p id="ambText"></p>
+    <div id="ambChoices" class="choices"></div>
+    <button id="prev">Précédent</button><button id="next" class="primary">Valider et suivant</button>
+  </div>
+  <div id="review" class="panel hidden">
+    <h3>Prévisualisation des modifications</h3>
+    <p id="reviewText"></p>
+    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
+    <button id="back">Revenir aux choix</button>
+    <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
+  </div>
+</div>
 <script>
-(function () {
-  const $ = (id) => document.getElementById(id);
-  let gristReady = false;
-  let running = false;
-
-  function showStatus(message, kind) {
-    const el = $('connection');
-    el.textContent = message;
-    el.className = 'status' + (kind ? ' ' + kind : '');
+const $=id=>document.getElementById(id);
+const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
+const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
+const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique"];
+let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
+let output=[];
+function val(col,i){return col && col[i]!==undefined ? col[i] : null}
+function text(v){
+ if(v===null||v===undefined)return "";
+ if(Array.isArray(v))return v.map(text).join(" / ");
+ if(typeof v==="object" && v.value!==undefined)return String(v.value);
+ return String(v);
+}
+function choiceList(v){
+ if(Array.isArray(v) && v[0]==="L") return v.slice(1).map(text);
+ if(Array.isArray(v)) return v.map(text);
+ if(v===null||v===undefined||v==="")return [];
+ return [text(v)];
+}
+function norm(v){return text(v).trim().toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function levels(v){return choiceList(v).map(x=>x.trim()).filter(Boolean)}
+function firstLevel(arr){return arr[0]||""}
+function keyValue(row,field){return norm(row[field])}
+function rowFrom(data,i){
+ const r={_id:data.id[i]};
+ for(const k of Object.keys(data)) if(k!=="id")r[k]=data[k][i];
+ return r;
+}
+function sameBase(a,b){return F.slice(0,3).every(f=>keyValue(a,f)===keyValue(b,f))}
+function sameLevels(a,b){const x=levels(a.Niveau).map(norm).sort(),y=levels(b.Niveau).map(norm).sort();return x.length===y.length&&x.every((v,i)=>v===y[i])}
+function levelOverlap(a,b){const x=levels(a.Niveau).map(norm),y=levels(b.Niveau).map(norm);return x.some(v=>y.includes(v))}
+function teacherOf(r){return text(r.Enseignant||r.NomEnseignant||r.Professeur).trim()}
+function getWishInfo(w){return {teacher:teacherOf(w),code:text(w.CodeParcours),name:text(w.NomParcours)}}
+function groupKey(r){return [r.AnneeScolaire,r.Cycle,r.Ecole,levels(r.Niveau).join("+")].map(norm).join("|")}
+function passport(r){return levels(r.Niveau).some(v=>["GS","CP","CE1"].includes(norm(v).toUpperCase()))}
+function setStatus(s){$("status").textContent=s}
+function validateColumns(data,table,required){
+ const missing=required.filter(c=>!Object.prototype.hasOwnProperty.call(data,c));
+ if(missing.length)throw new Error("Dans "+table+", colonne(s) introuvable(s) : "+missing.join(", "));
+}
+async function load(){
+ try{
+  setStatus("Connexion GRIST…");
+  grist.ready({requiredAccess:"full"});
+  console.log("[Module_fusion] lecture Table_ecoles");
+  ecoles=await grist.docApi.fetchTable(T_ECOLES);
+  console.log("[Module_fusion] lecture Table_voeux");
+  voeux=await grist.docApi.fetchTable(T_VOEUX);
+  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
+  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours"]);
+  prepare();
+  $("app").classList.remove("hidden");
+  setStatus("Lecture réussie : "+ecoles.id.length+" classes et "+voeux.id.length+" vœux.");
+ }catch(e){setStatus("ERREUR : "+(e.message||e));console.error("[Module_fusion]",e)}
+}
+function prepare(){
+ const E=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
+ const V=voeux.id.map((_,i)=>rowFrom(voeux,i));
+ assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",passport:passport(r),source:""}));
+ const used=new Set();
+ const wishes=V.filter(w=>teacherOf(w));
+ // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
+ for(const w of wishes){
+  const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
+  if(candidates.length){
+   const a=candidates[0],info=getWishInfo(w);used.add(a.row._id);
+   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,source:"Correspondance exacte"});
+  }else{
+   const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
+   ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
   }
-
-  function addStep(message) {
-    const el = document.createElement('div');
-    el.className = 'step';
-    el.textContent = message;
-    $('steps').appendChild(el);
+ }
+ // Les choix manuels sont présentés un par un. On ne présélectionne jamais une classe.
+ ambiguities=ambiguities.map((a,i)=>({...a,index:i}));
+ // Les classes sans enseignant reçoivent une étiquette provisoire par école/niveau.
+ const counts={};
+ for(const a of assignments){
+  if(!a.teacher){
+   const k=[a.row.AnneeScolaire,a.row.Ecole,levels(a.row.Niveau).join("+")].map(norm).join("|");
+   counts[k]=(counts[k]||0)+1;
+   a.teacher="Enseignant inconnu "+String.fromCharCode(64+Math.min(counts[k],26));
+   a.source="À compléter";
   }
-
-  function rowCount(data) {
-    if (!data || !Array.isArray(data.id)) return 0;
-    return data.id.length;
-  }
-
-  function renderResult(tableName, data, error) {
-    const tr = document.createElement('tr');
-    const cells = [tableName, error ? 'ÉCHEC' : 'Lecture réussie', error ? '—' : String(rowCount(data)), error ? error : Object.keys(data).filter(k => k !== 'id').join(', ')];
-    cells.forEach((value) => {
-      const td = document.createElement('td');
-      td.textContent = value;
-      tr.appendChild(td);
-    });
-    $('results').appendChild(tr);
-  }
-
-  async function testRead() {
-    if (!gristReady || running) return;
-    running = true;
-    $('retry').disabled = true;
-    $('steps').textContent = '';
-    $('results').textContent = '';
-    $('details').textContent = '';
-    showStatus('Lecture des tables en cours…');
-
-    const names = ['Table_ecoles', 'Table_voeux'];
-    const report = [];
-    let failures = 0;
-
-    for (const tableName of names) {
-      addStep('Demande de lecture : ' + tableName);
-      try {
-        // Même méthode que dans l'ancien widget fonctionnel : lecture séquentielle.
-        const data = await grist.docApi.fetchTable(tableName);
-        const count = rowCount(data);
-        const columns = Object.keys(data || {}).filter(k => k !== 'id');
-        report.push({table: tableName, rows: count, columns});
-        renderResult(tableName, data, null);
-        addStep('Réponse reçue pour ' + tableName + ' : ' + count + ' ligne(s), ' + columns.length + ' colonne(s).');
-      } catch (error) {
-        failures++;
-        const message = error && error.message ? error.message : String(error);
-        report.push({table: tableName, error: message});
-        renderResult(tableName, null, message);
-        addStep('ERREUR sur ' + tableName + ' : ' + message);
-      }
-    }
-
-    $('details').textContent = JSON.stringify(report, null, 2);
-    if (failures === 0) {
-      showStatus('Test terminé : les deux tables ont été lues. Aucune donnée n’a été modifiée.', 'ok');
-    } else {
-      showStatus('Test terminé avec ' + failures + ' erreur(s). Consulte les détails ci-dessous.', 'err');
-    }
-    running = false;
-    $('retry').disabled = false;
-  }
-
-  $('retry').addEventListener('click', testRead);
-
-  try {
-    // Reprise volontaire de l'initialisation qui fonctionnait dans l'ancien widget.
-    grist.ready({requiredAccess: 'full'});
-    gristReady = true;
-    showStatus('Widget initialisé. Préparation de la lecture…');
-    $('retry').disabled = false;
-    testRead();
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    showStatus('Impossible d’initialiser le widget GRIST : ' + message, 'err');
-    $('details').textContent = message;
-  }
-})();
+ }
+ $("summary").innerHTML="<b>"+E.length+" classes lues</b><br>"+wishes.length+" vœux avec enseignant<br>"+(wishes.length-ambiguities.length)+" affectations exactes<br>"+ambiguities.length+" situations à vérifier individuellement.";
+ if(ambiguities.length){showAmbiguity(0)}else showReview();
+}
+function showAmbiguity(i){
+ current=i;$("review").classList.add("hidden");$("ambiguity").classList.remove("hidden");
+ const a=ambiguities[i];$("ambTitle").textContent="Situation à vérifier — "+(i+1)+" / "+ambiguities.length;
+ $("ambText").textContent="Vœu de "+a.info.teacher+" : "+text(a.wish.Ecole)+", "+levels(a.wish.Niveau).join(" – ")+". Choisissez une classe disponible ou laissez ce vœu sans affectation.";
+ const box=$("ambChoices");box.innerHTML="";
+ const options=assignments.filter(x=>a.candidates.includes(x.row._id)&&!x.teacher.startsWith("Enseignant inconnu")&&!x._reserved);
+ // Candidates are filtered dynamically by prior validated decisions.
+ const available=assignments.filter(x=>a.candidates.includes(x.row._id)&&!ambiguities.some((b,j)=>j!==i&&decisions[j]===x.row._id));
+ available.forEach(x=>{
+  const label=document.createElement("label"),radio=document.createElement("input");
+  radio.type="radio";radio.name="choice";radio.value=x.row._id;
+  radio.checked=decisions[i]===x.row._id;
+  label.append(radio,document.createTextNode(" Classe "+text(x.row.RefClasse)+" — "+levels(x.row.Niveau).join(" / ")));
+  box.append(label);
+ });
+ const none=document.createElement("label"),r=document.createElement("input");r.type="radio";r.name="choice";r.value="";r.checked=decisions[i]==="";
+ none.append(r,document.createTextNode(" Ne pas affecter pour le moment"));box.append(none);
+ $("prev").disabled=i===0;$("next").textContent=i===ambiguities.length-1?"Valider et terminer":"Valider et suivant";
+}
+$("prev").onclick=()=>{saveDecision();showAmbiguity(current-1)};
+function saveDecision(){
+ const chosen=document.querySelector('input[name="choice"]:checked');
+ if(!chosen){alert("Choisissez une classe ou « Ne pas affecter ».");return false}
+ decisions[current]=chosen.value;return true;
+}
+$("next").onclick=()=>{if(!saveDecision())return;if(current<ambiguities.length-1)showAmbiguity(current+1);else showReview()};
+$("back").onclick=()=>{if(ambiguities.length)showAmbiguity(ambiguities.length-1);else $("review").classList.add("hidden")};
+function showReview(){
+ // Appliquer les décisions aux lignes en mémoire uniquement.
+ ambiguities.forEach((a,i)=>{
+  const id=decisions[i];if(!id)return;
+  const target=assignments.find(x=>x.row._id===Number(id)||String(x.row._id)===String(id));
+  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.source="Choix validé";}
+ });
+ $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
+ $("reviewText").textContent="Les valeurs ci-dessous sont une prévisualisation. Les enseignants inconnus sont conservés pour les classes non affectées. PasseportMusique sera coché pour GS, CP et CE1.";
+ $("rows").innerHTML="";
+ assignments.forEach(a=>{
+  const tr=document.createElement("tr");
+  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
+  $("rows").append(tr);
+ });
+ $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
+}
+$("write").onclick=async()=>{
+ if(!confirm("Confirmer l’écriture des quatre colonnes dans Table_ecoles ? Cette action modifiera les données."))return;
+ try{
+  $("write").disabled=true;
+  // Mise à jour limitée aux quatre colonnes autorisées.
+  const ids=assignments.map(a=>a.row._id);
+  const values={
+   Enseignant:assignments.map(a=>a.teacher),
+   CodeParcours:assignments.map(a=>a.code),
+   NomParcours:assignments.map(a=>a.name),
+   PasseportMusique:assignments.map(a=>a.passport)
+  };
+  await grist.docApi.applyUserActions([["BulkUpdateRecord",T_ECOLES,ids,values]]);
+  setStatus("Écriture terminée : "+ids.length+" lignes mises à jour dans Table_ecoles.");
+  $("write").textContent="Écriture terminée";
+ }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
+};
+load();
 </script>
-</body>
-</html>
+</body></html>
