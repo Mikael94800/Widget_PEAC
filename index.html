@@ -30,7 +30,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
   <div id="review" class="panel hidden">
     <h3>Prévisualisation des modifications</h3>
     <p id="reviewText"></p>
-    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
     <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
     <button id="back">Revenir aux choix</button>
     <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
@@ -40,7 +40,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
 const $=id=>document.getElementById(id);
 const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
 const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
-const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique"];
+const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone"];
 let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
 let output=[];
 function val(col,i){return col && col[i]!==undefined ? col[i] : null}
@@ -69,7 +69,7 @@ function sameBase(a,b){return F.slice(0,3).every(f=>keyValue(a,f)===keyValue(b,f
 function sameLevels(a,b){const x=levels(a.Niveau).map(norm).sort(),y=levels(b.Niveau).map(norm).sort();return x.length===y.length&&x.every((v,i)=>v===y[i])}
 function levelOverlap(a,b){const x=levels(a.Niveau).map(norm),y=levels(b.Niveau).map(norm);return x.some(v=>y.includes(v))}
 function teacherOf(r){return text(r.Enseignant||r.NomEnseignant||r.Professeur).trim()}
-function getWishInfo(w){return {teacher:teacherOf(w),code:text(w.CodeParcours),name:text(w.NomParcours)}}
+function getWishInfo(w){return {teacher:teacherOf(w),code:text(w.CodeParcours),name:text(w.NomParcours),effectifs:w.EffectifsClasse,mail:w.Mail,telephone:w.Telephone}}
 function groupKey(r){return [r.AnneeScolaire,r.Cycle,r.Ecole,levels(r.Niveau).join("+")].map(norm).join("|")}
 function passport(r){return levels(r.Niveau).some(v=>["GS","CP","CE1"].includes(norm(v).toUpperCase()))}
 function setStatus(s){$("status").textContent=s}
@@ -86,7 +86,7 @@ async function load(){
   console.log("[Module_fusion] lecture Table_voeux");
   voeux=await grist.docApi.fetchTable(T_VOEUX);
   validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
-  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours"]);
+  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone"]);
   prepare();
   $("app").classList.remove("hidden");
   setStatus("Lecture réussie : "+ecoles.id.length+" classes et "+voeux.id.length+" vœux.");
@@ -95,7 +95,7 @@ async function load(){
 function prepare(){
  const E=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
  const V=voeux.id.map((_,i)=>rowFrom(voeux,i));
- assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",passport:passport(r),source:""}));
+ assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,passport:passport(r),source:""}));
  const used=new Set();
  const wishes=V.filter(w=>teacherOf(w));
  // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
@@ -103,7 +103,7 @@ function prepare(){
   const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
   if(candidates.length){
    const a=candidates[0],info=getWishInfo(w);used.add(a.row._id);
-   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,source:"Correspondance exacte"});
+   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,source:"Correspondance exacte"});
   }else{
    const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
    ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
@@ -139,7 +139,7 @@ function showAmbiguity(i){
  available.forEach(x=>{
   const label=document.createElement("label"),radio=document.createElement("input");
   radio.type="radio";radio.name="choice";radio.value=x.row._id;
-  radio.checked=decisions[i]===x.row._id;
+  radio.checked=String(decisions[i])===String(x.row._id);
   label.append(radio,document.createTextNode(" Classe "+text(x.row.RefClasse)+" — "+levels(x.row.Niveau).join(" / ")));
   box.append(label);
  });
@@ -160,29 +160,32 @@ function showReview(){
  ambiguities.forEach((a,i)=>{
   const id=decisions[i];if(!id)return;
   const target=assignments.find(x=>x.row._id===Number(id)||String(x.row._id)===String(id));
-  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.source="Choix validé";}
+  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.source="Choix validé";}
  });
  $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
- $("reviewText").textContent="Les valeurs ci-dessous sont une prévisualisation. Les enseignants inconnus sont conservés pour les classes non affectées. PasseportMusique sera coché pour GS, CP et CE1.";
+ $("reviewText").textContent="Les valeurs ci-dessous sont une prévisualisation. EffectifsClasse, Mail et Telephone sont repris des vœux pour les classes affectées ; pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour GS, CP et CE1.";
  $("rows").innerHTML="";
  assignments.forEach(a=>{
   const tr=document.createElement("tr");
-  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
+  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
   $("rows").append(tr);
  });
  $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
 }
 $("write").onclick=async()=>{
- if(!confirm("Confirmer l’écriture des quatre colonnes dans Table_ecoles ? Cette action modifiera les données."))return;
+ if(!confirm("Confirmer l’écriture des sept colonnes prévues dans Table_ecoles ? Cette action modifiera les données."))return;
  try{
   $("write").disabled=true;
-  // Mise à jour limitée aux quatre colonnes autorisées.
+  // Mise à jour limitée aux sept colonnes prévues.
   const ids=assignments.map(a=>a.row._id);
   const values={
    Enseignant:assignments.map(a=>a.teacher),
    CodeParcours:assignments.map(a=>a.code),
    NomParcours:assignments.map(a=>a.name),
-   PasseportMusique:assignments.map(a=>a.passport)
+   PasseportMusique:assignments.map(a=>a.passport),
+    EffectifsClasse:assignments.map(a=>a.effectifs),
+    Mail:assignments.map(a=>a.mail),
+    Telephone:assignments.map(a=>a.telephone)
   };
   await grist.docApi.applyUserActions([["BulkUpdateRecord",T_ECOLES,ids,values]]);
   setStatus("Écriture terminée : "+ids.length+" lignes mises à jour dans Table_ecoles.");
