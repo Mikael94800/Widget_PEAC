@@ -21,6 +21,11 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
 <div id="status" class="status">Connexion à GRIST…</div>
 <div id="app" class="hidden">
   <div id="summary" class="panel"></div>
+  <div id="restartPanel" class="panel hidden">
+    <b>Fusion terminée.</b>
+    <p>Après avoir importé le nouveau fichier dans Table_voeux, cliquez ici pour relire les deux tables et préparer une nouvelle fusion.</p>
+    <button id="restart" class="primary">Recharger les données pour une nouvelle fusion</button>
+  </div>
   <div id="ambiguity" class="panel hidden">
     <strong id="ambTitle"></strong>
     <p id="ambText"></p>
@@ -77,22 +82,50 @@ function validateColumns(data,table,required){
  const missing=required.filter(c=>!Object.prototype.hasOwnProperty.call(data,c));
  if(missing.length)throw new Error("Dans "+table+", colonne(s) introuvable(s) : "+missing.join(", "));
 }
-async function load(){
+let isLoading=false;
+async function loadData(){
+ if(isLoading)return;
+ isLoading=true;
  try{
-  setStatus("Connexion GRIST…");
-  grist.ready({requiredAccess:"full"});
+  setStatus("Lecture des tables GRIST…");
+  $("app").classList.remove("hidden");
+  $("restartPanel").classList.add("hidden");
+  $("ambiguity").classList.add("hidden");
+  $("review").classList.add("hidden");
+  $("summary").textContent="Lecture des nouvelles données…";
+
+  // Vider intégralement l'état de la fusion précédente avant toute nouvelle lecture.
+  ecoles=null;voeux=null;assignments=[];ambiguities=[];decisions={};current=0;output=[];
+
   console.log("[Module_fusion] lecture Table_ecoles");
   ecoles=await grist.docApi.fetchTable(T_ECOLES);
   console.log("[Module_fusion] lecture Table_voeux");
   voeux=await grist.docApi.fetchTable(T_VOEUX);
+
   validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
   validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone"]);
+
   prepare();
-  $("app").classList.remove("hidden");
   setStatus("Lecture réussie : "+ecoles.id.length+" classes et "+voeux.id.length+" vœux.");
- }catch(e){setStatus("ERREUR : "+(e.message||e));console.error("[Module_fusion]",e)}
+ }catch(e){
+  setStatus("ERREUR : "+(e.message||e));
+  console.error("[Module_fusion]",e);
+ }finally{
+  isLoading=false;
+ }
+}
+function load(){
+ try{
+  setStatus("Connexion à GRIST…");
+  grist.ready({requiredAccess:"full"});
+  loadData();
+ }catch(e){
+  setStatus("ERREUR : "+(e.message||e));
+  console.error("[Module_fusion]",e);
+ }
 }
 function prepare(){
+ ambiguities=[];decisions={};current=0;
  const E=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
  const V=voeux.id.map((_,i)=>rowFrom(voeux,i));
  assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,passport:passport(r),source:""}));
@@ -190,7 +223,22 @@ $("write").onclick=async()=>{
   await grist.docApi.applyUserActions([["BulkUpdateRecord",T_ECOLES,ids,values]]);
   setStatus("Écriture terminée : "+ids.length+" lignes mises à jour dans Table_ecoles.");
   $("write").textContent="Écriture terminée";
+  $("write").disabled=true;
+  $("restartPanel").classList.remove("hidden");
+  $("ambiguity").classList.add("hidden");
+  $("review").classList.add("hidden");
+  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+ids.length+" lignes mises à jour dans Table_ecoles.";
  }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
+};
+$("restart").onclick=async()=>{
+  $("restart").disabled=true;
+  $("restart").textContent="Relecture en cours…";
+  try{
+    await loadData();
+  }finally{
+    $("restart").disabled=false;
+    $("restart").textContent="Recharger les données pour une nouvelle fusion";
+  }
 };
 load();
 </script>
