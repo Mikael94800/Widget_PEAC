@@ -23,8 +23,8 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
   <div id="summary" class="panel"></div>
   <div id="restartPanel" class="panel hidden">
     <b>Fusion terminée.</b>
-    <p>Après avoir importé le nouveau fichier dans Table_voeux, cliquez ici pour relire les deux tables et préparer une nouvelle fusion.</p>
-    <button id="restart" class="primary">Recharger les données pour une nouvelle fusion</button>
+    <p>Importez d’abord le nouveau fichier dans Table_voeux. Ensuite, cliquez ici pour relancer une fusion à partir des nouvelles données.</p>
+    <button id="restart" class="primary">Faire un nouvel import</button>
   </div>
   <div id="ambiguity" class="panel hidden">
     <strong id="ambTitle"></strong>
@@ -92,6 +92,8 @@ async function loadData(){
   $("restartPanel").classList.add("hidden");
   $("ambiguity").classList.add("hidden");
   $("review").classList.add("hidden");
+  $("write").disabled=false;
+  $("write").textContent="Confirmer l’écriture dans Table_ecoles";
   $("summary").textContent="Lecture des nouvelles données…";
 
   // Vider intégralement l'état de la fusion précédente avant toute nouvelle lecture.
@@ -221,23 +223,25 @@ $("write").onclick=async()=>{
     Telephone:assignments.map(a=>a.telephone)
   };
   await grist.docApi.applyUserActions([["BulkUpdateRecord",T_ECOLES,ids,values]]);
-  setStatus("Écriture terminée : "+ids.length+" lignes mises à jour dans Table_ecoles.");
-  $("write").textContent="Écriture terminée";
-  $("write").disabled=true;
-  $("restartPanel").classList.remove("hidden");
+  const updatedCount=ids.length;
+  // Vider les données et décisions de la session terminée.
+  ecoles=null; voeux=null; assignments=[]; ambiguities=[]; decisions={}; current=0; output=[];
   $("ambiguity").classList.add("hidden");
   $("review").classList.add("hidden");
-  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+ids.length+" lignes mises à jour dans Table_ecoles.";
+  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+updatedCount+" lignes mises à jour dans Table_ecoles.";
+  $("restartPanel").classList.remove("hidden");
+  setStatus("Fusion terminée. Importez le prochain fichier dans Table_voeux, puis cliquez sur « Faire un nouvel import ».");
+  $("write").disabled=true;
  }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
 };
 $("restart").onclick=async()=>{
   $("restart").disabled=true;
-  $("restart").textContent="Relecture en cours…";
+  $("restart").textContent="Lecture des nouvelles données…";
   try{
     await loadData();
   }finally{
     $("restart").disabled=false;
-    $("restart").textContent="Recharger les données pour une nouvelle fusion";
+    $("restart").textContent="Faire un nouvel import";
   }
 };
 load();
