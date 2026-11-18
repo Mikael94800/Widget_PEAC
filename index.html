@@ -35,7 +35,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
   <div id="review" class="panel hidden">
     <h3>Prévisualisation des modifications</h3>
     <p id="reviewText"></p>
-    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Année</th><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
     <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
     <button id="back">Revenir aux choix</button>
     <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
@@ -48,6 +48,7 @@ const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
 const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone"];
 let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
 let output=[];
+let selectedYearKeys=[];
 function val(col,i){return col && col[i]!==undefined ? col[i] : null}
 function text(v){
  if(v===null||v===undefined)return "";
@@ -97,14 +98,14 @@ async function loadData(){
   $("summary").textContent="Lecture des nouvelles données…";
 
   // Vider intégralement l'état de la fusion précédente avant toute nouvelle lecture.
-  ecoles=null;voeux=null;assignments=[];ambiguities=[];decisions={};current=0;output=[];
+  ecoles=null;voeux=null;assignments=[];ambiguities=[];decisions={};current=0;output=[];selectedYearKeys=[];
 
   console.log("[Module_fusion] lecture Table_ecoles");
   ecoles=await grist.docApi.fetchTable(T_ECOLES);
   console.log("[Module_fusion] lecture Table_voeux");
   voeux=await grist.docApi.fetchTable(T_VOEUX);
 
-  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
+  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse","FusionEffectuee"]);
   validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone"]);
 
   prepare();
@@ -127,37 +128,67 @@ function load(){
  }
 }
 function prepare(){
- ambiguities=[];decisions={};current=0;
- const E=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
- const V=voeux.id.map((_,i)=>rowFrom(voeux,i));
+ ambiguities=[];decisions={};current=0;selectedYearKeys=[];
+ const allE=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
+ const allV=voeux.id.map((_,i)=>rowFrom(voeux,i));
+ const ykey=r=>norm(r.AnneeScolaire);
+ const ylabel=r=>text(r.AnneeScolaire).trim();
+ const byYear=new Map();
+ allE.forEach(r=>{const k=ykey(r);if(!byYear.has(k))byYear.set(k,[]);byYear.get(k).push(r)});
+ const wishYears=new Map();
+ allV.filter(w=>teacherOf(w)).forEach(w=>{const k=ykey(w);if(k&&!wishYears.has(k))wishYears.set(k,ylabel(w))});
+
+ const eligible=[], completed=[], partial=[];
+ wishYears.forEach((label,k)=>{
+  const rows=byYear.get(k)||[];
+  if(!rows.length)return;
+  const checked=rows.filter(r=>r.FusionEffectuee===true).length;
+  if(checked===rows.length)completed.push(label);
+  else if(checked>0)partial.push(label+" ("+checked+"/"+rows.length+" classes cochées)");
+  else eligible.push(k);
+ });
+
+ if(partial.length){
+  $("ambiguity").classList.add("hidden");$("review").classList.add("hidden");$("restartPanel").classList.add("hidden");
+  $("summary").innerHTML="<b>Fusion bloquée : année(s) partiellement traitée(s).</b><br>"+partial.join("<br>")+
+   "<br><br>Vérifiez FusionEffectuee dans Table_ecoles : pour chaque année, toutes les classes doivent être cochées ou aucune ne doit l'être. Aucune donnée n'a été modifiée.";
+  setStatus("Fusion bloquée : statut FusionEffectuee incohérent.");return;
+ }
+ if(!eligible.length){
+  $("ambiguity").classList.add("hidden");$("review").classList.add("hidden");$("restartPanel").classList.remove("hidden");
+  $("summary").innerHTML="<b>Aucune nouvelle année à fusionner.</b><br>"+
+   (completed.length?"Année(s) déjà fusionnée(s), ignorée(s) : "+completed.join(", ")+".<br>":"")+
+   "Aucune année non fusionnée présente dans Table_voeux ne correspond à des classes à traiter dans Table_ecoles.";
+  setStatus("Aucune nouvelle année à traiter. Importez les nouveaux vœux puis cliquez sur « Faire un nouvel import ».");return;
+ }
+
+ selectedYearKeys=eligible.slice();
+ const eligibleSet=new Set(eligible);
+ const E=allE.filter(r=>eligibleSet.has(ykey(r)));
+ const V=allV.filter(w=>eligibleSet.has(ykey(w)));
  assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,passport:passport(r),source:""}));
- const used=new Set();
- const wishes=V.filter(w=>teacherOf(w));
- // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
+ const used=new Set(), wishes=V.filter(w=>teacherOf(w));
+
  for(const w of wishes){
-  const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
-  if(candidates.length){
-   const a=candidates[0],info=getWishInfo(w);used.add(a.row._id);
+  const c=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
+  if(c.length){
+   const a=c[0],info=getWishInfo(w);used.add(a.row._id);
    Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,source:"Correspondance exacte"});
   }else{
-   const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
-   ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
+   const c2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
+   ambiguities.push({wish:w,candidates:c2.map(a=>a.row._id),selected:null,info:getWishInfo(w)});
   }
  }
- // Les choix manuels sont présentés un par un. On ne présélectionne jamais une classe.
  ambiguities=ambiguities.map((a,i)=>({...a,index:i}));
- // Les classes sans enseignant reçoivent une étiquette provisoire par école/niveau.
  const counts={};
- for(const a of assignments){
-  if(!a.teacher){
-   const k=[a.row.AnneeScolaire,a.row.Ecole,levels(a.row.Niveau).join("+")].map(norm).join("|");
-   counts[k]=(counts[k]||0)+1;
-   a.teacher="Enseignant inconnu "+String.fromCharCode(64+Math.min(counts[k],26));
-   a.source="À compléter";
-  }
- }
- $("summary").innerHTML="<b>"+E.length+" classes lues</b><br>"+wishes.length+" vœux avec enseignant<br>"+(wishes.length-ambiguities.length)+" affectations exactes<br>"+ambiguities.length+" situations à vérifier individuellement.";
- if(ambiguities.length){showAmbiguity(0)}else showReview();
+ assignments.forEach(a=>{if(!a.teacher){
+  const k=[a.row.AnneeScolaire,a.row.Ecole,levels(a.row.Niveau).join("+")].map(norm).join("|");
+  counts[k]=(counts[k]||0)+1;a.teacher="Enseignant inconnu "+String.fromCharCode(64+Math.min(counts[k],26));a.source="À compléter";
+ }});
+ $("summary").innerHTML="<b>"+E.length+" classes à traiter</b><br>Nouvelle(s) année(s) : "+eligible.map(k=>wishYears.get(k)).join(", ")+"<br>"+
+  (completed.length?"Année(s) déjà fusionnée(s), ignorée(s) : "+completed.join(", ")+"<br>":"")+
+  wishes.length+" vœux avec enseignant<br>"+(wishes.length-ambiguities.length)+" affectations exactes<br>"+ambiguities.length+" situations à vérifier individuellement.";
+ if(ambiguities.length)showAmbiguity(0);else showReview();
 }
 function showAmbiguity(i){
  current=i;$("review").classList.add("hidden");$("ambiguity").classList.remove("hidden");
@@ -198,41 +229,48 @@ function showReview(){
   if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.source="Choix validé";}
  });
  $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
- $("reviewText").textContent="Les valeurs ci-dessous sont une prévisualisation. EffectifsClasse, Mail et Telephone sont repris des vœux pour les classes affectées ; pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour GS, CP et CE1.";
+ $("reviewText").textContent="Seules les années non encore fusionnées sont affichées. Après confirmation, toutes les classes de ces années seront marquées FusionEffectuee. EffectifsClasse, Mail et Telephone sont repris des vœux pour les classes affectées ; pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour GS, CP et CE1.";
  $("rows").innerHTML="";
  assignments.forEach(a=>{
   const tr=document.createElement("tr");
-  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
+  [a.row.AnneeScolaire,a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
   $("rows").append(tr);
  });
  $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
 }
 $("write").onclick=async()=>{
- if(!confirm("Confirmer l’écriture des sept colonnes prévues dans Table_ecoles ? Cette action modifiera les données."))return;
+ if(!confirm("Confirmer la fusion des seules années non encore fusionnées ? Les classes traitées seront marquées FusionEffectuee."))return;
  try{
   $("write").disabled=true;
-  // Mise à jour limitée aux sept colonnes prévues.
+  // Relecture de sécurité juste avant écriture.
+  const latest=await grist.docApi.fetchTable(T_ECOLES);
+  validateColumns(latest,T_ECOLES,["AnneeScolaire","FusionEffectuee"]);
+  const latestRows=latest.id.map((_,i)=>rowFrom(latest,i));
+  const selected=new Set(selectedYearKeys);
+  const targetRows=latestRows.filter(r=>selected.has(norm(r.AnneeScolaire)));
+  const latestIds=targetRows.map(r=>String(r._id)).sort();
+  const plannedIds=assignments.map(a=>String(a.row._id)).sort();
+  if(latestIds.length!==plannedIds.length||latestIds.some((id,i)=>id!==plannedIds[i]))
+   throw new Error("Les classes de Table_ecoles ont changé depuis la prévisualisation. Rechargez les données avant de fusionner.");
+  if(targetRows.some(r=>r.FusionEffectuee===true))
+   throw new Error("Une classe de l'année sélectionnée est déjà marquée FusionEffectuee. Fusion annulée par sécurité.");
+
   const ids=assignments.map(a=>a.row._id);
   const values={
-   Enseignant:assignments.map(a=>a.teacher),
-   CodeParcours:assignments.map(a=>a.code),
-   NomParcours:assignments.map(a=>a.name),
-   PasseportMusique:assignments.map(a=>a.passport),
-    EffectifsClasse:assignments.map(a=>a.effectifs),
-    Mail:assignments.map(a=>a.mail),
-    Telephone:assignments.map(a=>a.telephone)
+   Enseignant:assignments.map(a=>a.teacher),CodeParcours:assignments.map(a=>a.code),
+   NomParcours:assignments.map(a=>a.name),PasseportMusique:assignments.map(a=>a.passport),
+   EffectifsClasse:assignments.map(a=>a.effectifs),Mail:assignments.map(a=>a.mail),
+   Telephone:assignments.map(a=>a.telephone),FusionEffectuee:assignments.map(()=>true)
   };
   await grist.docApi.applyUserActions([["BulkUpdateRecord",T_ECOLES,ids,values]]);
-  const updatedCount=ids.length;
-  // Vider les données et décisions de la session terminée.
-  ecoles=null; voeux=null; assignments=[]; ambiguities=[]; decisions={}; current=0; output=[];
-  $("ambiguity").classList.add("hidden");
-  $("review").classList.add("hidden");
-  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+updatedCount+" lignes mises à jour dans Table_ecoles.";
+  const count=ids.length, done=[...new Set(assignments.map(a=>text(a.row.AnneeScolaire).trim()))];
+  ecoles=null;voeux=null;assignments=[];ambiguities=[];decisions={};current=0;output=[];selectedYearKeys=[];
+  $("ambiguity").classList.add("hidden");$("review").classList.add("hidden");
+  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+count+" classes mises à jour.<br>Année(s) marquée(s) FusionEffectuee : "+done.join(", ")+".";
   $("restartPanel").classList.remove("hidden");
-  setStatus("Fusion terminée. Importez le prochain fichier dans Table_voeux, puis cliquez sur « Faire un nouvel import ».");
+  setStatus("Fusion terminée. Les années traitées sont protégées contre une nouvelle fusion.");
   $("write").disabled=true;
- }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
+ }catch(e){$("write").disabled=false;alert("Fusion annulée ou échec de l’écriture : "+(e.message||e));console.error("[Module_fusion]",e)}
 };
 $("restart").onclick=async()=>{
   $("restart").disabled=true;
