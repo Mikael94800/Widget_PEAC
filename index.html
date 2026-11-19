@@ -1,287 +1,80 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
-<title>Fusion des structures et des vœux</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Synthèse PEAC & dispositifs — Grist</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <style>
-body{font:14px system-ui, sans-serif;margin:18px;color:#222}h2{margin:0 0 10px}
-button{padding:8px 13px;margin:5px 5px 5px 0;cursor:pointer;border:1px solid #aaa;border-radius:6px;background:#f7f7f7}
-button.primary{background:#185abc;color:white;border-color:#185abc}button:disabled{opacity:.4;cursor:not-allowed}
-.panel{padding:12px;border:1px solid #ddd;border-radius:8px;margin:12px 0}
-.status{padding:9px;background:#f2f5f8;border-radius:6px;white-space:pre-wrap}
-.small{color:#555;font-size:12px}.choices label{display:block;margin:8px 0}
-table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;text-align:left;padding:6px}
-.hidden{display:none}.warn{color:#9b4b00}.good{color:#176b35}
+:root{--navy:#183b63;--blue:#2b6cb0;--teal:#319795;--bg:#f4f7fb;--white:#fff;--text:#26374a;--muted:#68798c;--border:#dce5ef;--soft:#edf4fa}
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:14px}h1{font-size:1.25rem;color:var(--navy);margin:4px 0 12px}h2{font-size:1rem;color:var(--navy);margin:16px 0 9px}.topline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.btn{border:0;background:var(--teal);color:white;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.btn:hover{filter:brightness(.96)}.btn.secondary{background:#e5eef7;color:var(--navy);border:1px solid var(--border)}.filters{display:flex;flex-wrap:wrap;gap:10px;background:white;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}.filter{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px}.filter label{font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase}.filter select{border:1px solid var(--border);border-radius:6px;padding:7px;color:var(--text);background:white;min-width:0}.filter select[multiple]{height:76px}.hint{font-size:.65rem;color:#8a98a8}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:9px;margin-bottom:12px}.kpi{background:white;border:1px solid var(--border);border-left:4px solid var(--blue);border-radius:9px;padding:11px}.kpi.budget{border-left-color:var(--teal)}.kpi .label{font-size:.72rem;color:var(--muted);font-weight:650}.kpi .value{font-size:1.25rem;font-weight:800;color:var(--navy);margin-top:2px}.kpi .sub{font-size:.7rem;color:var(--muted)}.table-wrap{overflow:auto;background:white;border:1px solid var(--border);border-radius:9px}table{width:100%;border-collapse:collapse;font-size:.78rem;min-width:820px}th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}th{background:var(--soft);color:var(--navy);position:sticky;top:0;z-index:1}tbody tr:hover{background:#f4fbfc}tbody tr.selectable{cursor:pointer}tbody tr.selected{background:#e2f4f4;box-shadow:inset 3px 0 var(--teal)}.badge{background:#e6edf5;border-radius:20px;padding:2px 7px;font-weight:700}.detail{display:none;background:white;border:2px solid #83c6c5;border-radius:10px;padding:12px;margin-top:10px}.detail.show{display:block}.detail-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;color:var(--navy);font-weight:750}.detail-summary{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;margin:8px 0}.detail-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(200px,1fr);gap:10px}.detail-note{background:var(--soft);border-radius:8px;padding:10px;font-size:.82rem}.detail-table{min-width:550px}.status{padding:8px 10px;color:var(--muted);font-size:.8rem}.empty{padding:18px;text-align:center;color:var(--muted)}.footnote{font-size:.7rem;color:var(--muted);margin-top:6px}@media(max-width:760px){body{padding:8px}.detail-grid{grid-template-columns:1fr}.filters{padding:9px}.filter{min-width:130px}}
 </style>
-</head>
-<body>
-<h2>Fusion des structures des écoles avec les vœux émis et les parcours attribués</h2>
-<div class="panel">
- <b>Rappel de la procédure à suivre</b>
- <ol>
-  <li>Intégrer l’ensemble des classes connues dans <b>Table_ecoles</b> pour l’année concernée et vérifier que la colonne <b>FusionEffectuee</b> n’est pas cochée.</li>
-  <li>Importer les données de l’année concernée dans <b>Table_voeux</b> à l’aide de l’outil d’import de cette table.</li>
-  <li>Lancer le présent module de fusion et traiter, le cas échéant, les situations signalées ci-dessous.</li>
- </ol>
- <p class="small">La fusion met à jour les informations prévues dans Table_ecoles. Elle ne crée ni ne supprime aucune classe.</p>
+</head><body>
+<div class="topline"><h1>📊 Synthèse PEAC, dispositifs & budget</h1><button class="btn" onclick="exportSynthesis()">⬇ Exporter la synthèse EAC</button></div>
+<div class="filters">
+ <div class="filter"><label>Année scolaire</label><select id="filter-annee" onchange="updateDashboard()"></select></div>
+ <div class="filter"><label>École</label><select id="filter-ecole" onchange="updateDashboard()"><option value="ALL">Toutes</option></select></div>
+ <div class="filter"><label>Cycle</label><select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select></div>
+ <div class="filter"><label>Niveau (multisélection)</label><select id="filter-niveau" multiple onchange="updateDashboard()"></select><span class="hint">Ctrl/Cmd pour plusieurs niveaux</span></div>
+ <div class="filter"><label>Champ disciplinaire</label><select id="filter-discipline" onchange="updateDashboard()"><option value="ALL">Tous</option></select></div>
 </div>
-<h3>Synthèse des données présentes dans Table_ecoles et Table_voeux en attente de fusion</h3>
-<div id="status" class="status">Connexion à GRIST…</div>
-<div id="app" class="hidden">
-  <div id="summary" class="panel"></div>
-  <div id="restartPanel" class="panel hidden">
-    <b>Fusion terminée.</b>
-    <p>Importez d’abord le nouveau fichier dans Table_voeux. Ensuite, cliquez ici pour relancer une fusion à partir des nouvelles données.</p>
-    <button id="restart" class="primary">Faire un nouvel import</button>
-  </div>
-  <div id="ambiguity" class="panel hidden">
-    <strong id="ambTitle"></strong>
-    <p id="ambText"></p>
-    <div id="ambChoices" class="choices"></div>
-    <button id="prev">Précédent</button><button id="next" class="primary">Valider et suivant</button>
-  </div>
-  <div id="review" class="panel hidden">
-    <h3>Prévisualisation des modifications</h3>
-    <p id="reviewText"></p>
-    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Coût du parcours</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
-    <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
-    <button id="back">Revenir aux choix</button>
-    <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
-  </div>
+<div class="kpis">
+ <div class="kpi"><div class="label">Classes bénéficiant d'un parcours EAC</div><div class="value" id="kpi-parcours-classes">0</div><div class="sub" id="kpi-parcours-eleves">0 élèves</div></div>
+ <div class="kpi budget"><div class="label">Coût total des parcours</div><div class="value" id="kpi-budget-parcours">0 €</div><div class="sub">Source : Table_ecoles.CoutParcours</div></div>
+ <div class="kpi"><div class="label">Passeport Musique</div><div class="value" id="kpi-passmusique-classes">0 classes</div><div class="sub" id="kpi-passmusique-eleves">0 élèves</div></div>
+ <div class="kpi"><div class="label">École & Cinéma</div><div class="value" id="kpi-cinema-classes">0 classes</div><div class="sub" id="kpi-cinema-eleves">0 élèves</div></div>
+ <div class="kpi"><div class="label">Chorale CRR93</div><div class="value" id="kpi-chorale-classes">0 classes</div><div class="sub" id="kpi-chorale-eleves">0 élèves</div></div>
+ <div class="kpi"><div class="label">CHAM / CHAT</div><div class="value" id="kpi-cham-classes">0 classes</div><div class="sub" id="kpi-cham-eleves">0 élèves</div></div>
 </div>
-<div class="panel warn">
- <b>Attention</b> : les dispositifs Ecole&amp;Cinema, Chorale CRR93 et Sensibilisation CHAM/CHAT doivent être saisis manuellement par l’utilisateur. Cette saisie peut conduire à remplacer les libellés provisoires « Enseignant inconnu A », « Enseignant inconnu B », etc., et à modifier les effectifs. Elle ne doit en aucun cas faire évoluer le nombre total de classes.
-</div>
+<h2>🏫 Répartition & suivi budgétaire par école et cycle</h2>
+<div class="table-wrap"><table><thead><tr><th>École & Cycle</th><th>Classes</th><th>Élèves</th><th>Parcours EAC</th><th>Coût EAC</th><th>Passeport Musique</th><th>École & Cinéma</th><th>Chorale</th><th>CHAM/CHAT</th></tr></thead><tbody id="summary-table-body"></tbody></table></div>
+<div id="detail-panel" class="detail"><div class="detail-head"><span id="detail-title">Détail école / cycle</span><button class="btn secondary" onclick="closeDetail()">Fermer ✕</button></div><div id="detail-summary" class="detail-summary"></div><div class="detail-grid"><div class="table-wrap"><table class="detail-table"><thead><tr><th>Classe / Niveau</th><th>Nom du parcours</th><th>Champ disciplinaire</th><th>Partenaire</th><th>Coût</th></tr></thead><tbody id="detail-body"></tbody></table></div><div class="detail-note" id="detail-note"></div></div></div>
+<div id="status" class="status">Chargement des données Grist…</div>
 <script>
-const $=id=>document.getElementById(id);
-const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
-const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
-const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours","FusionEffectuee"];
-let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
-let output=[];
-function val(col,i){return col && col[i]!==undefined ? col[i] : null}
-function text(v){
- if(v===null||v===undefined)return "";
- if(Array.isArray(v))return v.map(text).join(" / ");
- if(typeof v==="object" && v.value!==undefined)return String(v.value);
- return String(v);
+let ecolesRecords=[], voeuxRows=[], parcoursRows=[], parcoursByName={}, partnerByCode={}, rankInfo={}, selectedSchoolKey=null, tableNames={};
+const TABLE_ECOLES='Table_ecoles', TABLE_VOEUX='Table_voeux', TABLE_PARCOURS='Table_parcours';
+function norm(v){return String(v??'').trim().toLocaleLowerCase('fr');}
+function extractValues(v){if(v==null||v===''||v===0)return[];if(Array.isArray(v))return v.map(x=>String(x).trim()).filter(Boolean);let s=String(v).trim();if(!s)return[];if(s.includes(','))return s.split(',').map(x=>x.trim()).filter(Boolean);return [s];}
+function valNum(v){if(typeof v==='number')return v;return Number(String(v??'').replace(/[ €\s]/g,'').replace(',','.'))||0;}
+function isAssigned(r){let c=String(r.CodeParcours??'').trim();return c!==''&&c!=='0'&&c!=='null'&&c!=='undefined';}
+function getName(r){return String(r.NomParcours??'').trim();}
+function getCode(r){return String(r.CodeParcours??'').trim();}
+function safeText(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function money(n){return (Number(n)||0).toLocaleString('fr-FR',{maximumFractionDigits:2})+' €';}
+function getTypesForRecord(r){let name=getName(r);return parcoursByName[norm(name)]?.types||[];}
+function getPartner(r){let code=getCode(r);let vals=partnerByCode[code]||[];return [...new Set(vals.filter(Boolean))].join(' / ')||'—';}
+function setStatus(t){document.getElementById('status').textContent=t;}
+try{grist.ready({requiredAccess:'full'});grist.onRecords(records=>{ecolesRecords=records||[];loadRelated();});}catch(e){setStatus('Impossible d’initialiser Grist : '+e.message);}
+async function fetchMaybe(table){try{return await grist.docApi.fetchTable(table);}catch(e){console.warn('Table absente/inaccessible : '+table,e);return null;}}
+async function loadRelated(){
+ let v=await fetchMaybe(TABLE_VOEUX);voeuxRows=columnsToRecords(v);
+ let p=await fetchMaybe(TABLE_PARCOURS);parcoursRows=columnsToRecords(p);
+ parcoursByName={};parcoursRows.forEach(r=>{let name=String(r.NomParcours||'').trim();if(name)parcoursByName[norm(name)]={name,types:extractValues(r.TypeParcours)};});
+ partnerByCode={};voeuxRows.forEach(r=>{let code=String(r.CodeParcours??'').trim();let partner=String(r.Partenaire??'').trim();if(code&&partner){partnerByCode[code]??=[];partnerByCode[code].push(partner);}});
+ populateFilters();setStatus(`${ecolesRecords.length} lignes de Table_ecoles chargées. Sélectionnez une ligne pour voir le détail des parcours.`);
 }
-function choiceList(v){
- if(Array.isArray(v) && v[0]==="L") return v.slice(1).map(text);
- if(Array.isArray(v)) return v.map(text);
- if(v===null||v===undefined||v==="")return [];
- return [text(v)];
-}
-function norm(v){return text(v).trim().toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
-function isChecked(v){return v===true || v===1 || v==="true"}
-function pendingYears(E,V){return [...new Set([...E,...V].map(r=>text(r.AnneeScolaire).trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr",{numeric:true}));}
-function levels(v){return choiceList(v).map(x=>x.trim()).filter(Boolean)}
-function firstLevel(arr){return arr[0]||""}
-function keyValue(row,field){return norm(row[field])}
-function rowFrom(data,i){
- const r={_id:data.id[i]};
- for(const k of Object.keys(data)) if(k!=="id")r[k]=data[k][i];
- return r;
-}
-function sameBase(a,b){return F.slice(0,3).every(f=>keyValue(a,f)===keyValue(b,f))}
-function sameLevels(a,b){const x=levels(a.Niveau).map(norm).sort(),y=levels(b.Niveau).map(norm).sort();return x.length===y.length&&x.every((v,i)=>v===y[i])}
-function levelOverlap(a,b){const x=levels(a.Niveau).map(norm),y=levels(b.Niveau).map(norm);return x.some(v=>y.includes(v))}
-function teacherOf(r){return text(r.Enseignant||r.NomEnseignant||r.Professeur).trim()}
-function numericOrNull(v, field){
- if(v===null || v===undefined || v==="") return null;
- if(typeof v==="number" && Number.isFinite(v)) return v;
- const n=Number(String(v).trim().replace(/\s/g,"").replace(",","."));
- if(!Number.isFinite(n)) throw new Error("Valeur non numérique dans Table_voeux."+field+" : "+text(v));
- return n;
-}
-function getWishInfo(w){
- return {teacher:teacherOf(w),code:text(w.CodeParcours),name:text(w.NomParcours),
-  effectifs:numericOrNull(w.EffectifsClasse,"EffectifsClasse"),mail:text(w.Mail),telephone:text(w.Telephone),cout:w.CoutParcours};
-}
-function groupKey(r){return [r.AnneeScolaire,r.Cycle,r.Ecole,levels(r.Niveau).join("+")].map(norm).join("|")}
-function passport(r){return levels(r.Niveau).some(v=>["GS","CP","CE1"].includes(norm(v).toUpperCase()))}
-function setStatus(s){$("status").textContent=s}
-function validateColumns(data,table,required){
- const missing=required.filter(c=>!Object.prototype.hasOwnProperty.call(data,c));
- if(missing.length)throw new Error("Dans "+table+", colonne(s) introuvable(s) : "+missing.join(", "));
-}
-let isLoading=false;
-async function loadData(){
- if(isLoading)return;
- isLoading=true;
- try{
-  setStatus("Lecture des tables GRIST…");
-  $("app").classList.remove("hidden");
-  $("restartPanel").classList.add("hidden");
-  $("ambiguity").classList.add("hidden");
-  $("review").classList.add("hidden");
-  $("write").disabled=false;
-  $("write").textContent="Confirmer l’écriture dans Table_ecoles";
-  $("summary").textContent="Lecture des nouvelles données…";
-
-  // Vider intégralement l'état de la fusion précédente avant toute nouvelle lecture.
-  ecoles=null;voeux=null;assignments=[];ambiguities=[];decisions={};current=0;output=[];
-
-  console.log("[Module_fusion] lecture Table_ecoles");
-  ecoles=await grist.docApi.fetchTable(T_ECOLES);
-  console.log("[Module_fusion] lecture Table_voeux");
-  voeux=await grist.docApi.fetchTable(T_VOEUX);
-
-  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
-  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours","FusionEffectuee"]);
-
-  const pendingE=ecoles.id.map((_,i)=>rowFrom(ecoles,i)).filter(r=>!isChecked(r.FusionEffectuee));
-  const pendingV=voeux.id.map((_,i)=>rowFrom(voeux,i)).filter(r=>!isChecked(r.FusionEffectuee));
-  const years=pendingYears(pendingE,pendingV);
-  prepare(pendingE,pendingV);
-  setStatus("Lecture des tables réussies : "+pendingE.length+" classes, "+pendingV.filter(w=>teacherOf(w)).length+" vœux émis, sur les années scolaires "+(years.length?years.join(", "):"aucune année en attente")+".");
- }catch(e){
-  setStatus("ERREUR : "+(e.message||e));
-  console.error("[Module_fusion]",e);
- }finally{
-  isLoading=false;
- }
-}
-function load(){
- try{
-  setStatus("Connexion à GRIST…");
-  grist.ready({requiredAccess:"full"});
-  loadData();
- }catch(e){
-  setStatus("ERREUR : "+(e.message||e));
-  console.error("[Module_fusion]",e);
- }
-}
-function prepare(E,V){
- ambiguities=[];decisions={};current=0;
- assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,cout:r.CoutParcours,passport:passport(r),source:""}));
- const used=new Set();
- const wishes=V.filter(w=>teacherOf(w));
- // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
- for(const w of wishes){
-  const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
-  if(candidates.length){
-   const a=candidates[0],info=getWishInfo(w);used.add(a.row._id);
-   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,cout:info.cout,wishId:w._id,source:"Correspondance exacte"});
-  }else{
-   const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
-   ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
-  }
- }
- // Les choix manuels sont présentés un par un. On ne présélectionne jamais une classe.
- ambiguities=ambiguities.map((a,i)=>({...a,index:i}));
- // Les classes sans enseignant reçoivent une étiquette provisoire par école/niveau.
- const counts={};
- for(const a of assignments){
-  if(!a.teacher){
-   const k=[a.row.AnneeScolaire,a.row.Ecole,levels(a.row.Niveau).join("+")].map(norm).join("|");
-   counts[k]=(counts[k]||0)+1;
-   a.teacher="Enseignant inconnu "+String.fromCharCode(64+Math.min(counts[k],26));
-   a.source="À compléter";
-  }
- }
- const exactCount=assignments.filter(a=>a.source==="Correspondance exacte").length;
- $("summary").innerHTML="<b>Situation sans problématique particulière — "+exactCount+"</b><br>"+exactCount+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Tous les vœux en attente avec enseignant ont une correspondance exacte.");
- if(ambiguities.length){showAmbiguity(0)}else showReview();
-}
-function showAmbiguity(i){
- current=i;$("review").classList.add("hidden");$("ambiguity").classList.remove("hidden");
- const a=ambiguities[i];$("ambTitle").textContent="Situation à vérifier — "+(i+1)+" / "+ambiguities.length;
- $("ambText").textContent="Vœu de "+a.info.teacher+" : "+text(a.wish.Ecole)+", "+levels(a.wish.Niveau).join(" – ")+". Choisissez une classe disponible ou laissez ce vœu sans affectation.";
- const box=$("ambChoices");box.innerHTML="";
- const options=assignments.filter(x=>a.candidates.includes(x.row._id)&&!x.teacher.startsWith("Enseignant inconnu")&&!x._reserved);
- // Candidates are filtered dynamically by prior validated decisions.
- const available=assignments.filter(x=>
-  a.candidates.some(id=>String(id)===String(x.row._id)) &&
-  x.source!=="Correspondance exacte" &&
-  !ambiguities.some((b,j)=>j!==i && decisions[j]!==undefined && String(decisions[j])===String(x.row._id))
- );
- available.forEach(x=>{
-  const label=document.createElement("label"),radio=document.createElement("input");
-  radio.type="radio";radio.name="choice";radio.value=x.row._id;
-  radio.checked=String(decisions[i])===String(x.row._id);
-  label.append(radio,document.createTextNode(" Classe "+text(x.row.RefClasse)+" — "+levels(x.row.Niveau).join(" / ")));
-  box.append(label);
- });
- const none=document.createElement("label"),r=document.createElement("input");r.type="radio";r.name="choice";r.value="";r.checked=decisions[i]==="";
- none.append(r,document.createTextNode(" Ne pas affecter pour le moment"));box.append(none);
- $("prev").disabled=i===0;$("next").textContent=i===ambiguities.length-1?"Valider et terminer":"Valider et suivant";
-}
-$("prev").onclick=()=>{saveDecision();showAmbiguity(current-1)};
-function saveDecision(){
- const chosen=document.querySelector('input[name="choice"]:checked');
- if(!chosen){alert("Choisissez une classe ou « Ne pas affecter ».");return false}
- decisions[current]=chosen.value;return true;
-}
-$("next").onclick=()=>{if(!saveDecision())return;if(current<ambiguities.length-1)showAmbiguity(current+1);else showReview()};
-$("back").onclick=()=>{if(ambiguities.length)showAmbiguity(ambiguities.length-1);else $("review").classList.add("hidden")};
-function showReview(){
- // Appliquer les décisions aux lignes en mémoire uniquement.
- ambiguities.forEach((a,i)=>{
-  const id=decisions[i];if(!id)return;
-  const target=assignments.find(x=>x.row._id===Number(id)||String(x.row._id)===String(id));
-  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.cout=a.info.cout;target.wishId=a.wish._id;target.source="Choix validé";}
- });
- $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
- const exactCount=assignments.filter(a=>a.source==="Correspondance exacte").length;
- const assignedCount=assignments.filter(a=>a.source==="Correspondance exacte"||a.source==="Choix validé").length;
- $("summary").innerHTML="<b>Situation sans problématique particulière — "+exactCount+"</b><br>"+exactCount+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées. Affectations réalisées après validation : "+(assignedCount-exactCount)+".":"");
- $("reviewText").textContent="Prévisualisation avant écriture : Enseignant, CodeParcours, NomParcours, EffectifsClasse, Mail, Telephone et CoutParcours sont repris de Table_voeux pour chaque classe affectée. FusionEffectuee sera cochée dans Table_ecoles pour toutes les classes traitées et dans Table_voeux pour les vœux effectivement affectés. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour les classes comprenant GS, CP ou CE1.";
- $("rows").innerHTML="";
- assignments.forEach(a=>{
-  const tr=document.createElement("tr");
-  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.cout,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
-  $("rows").append(tr);
- });
- $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
-}
-$("write").onclick=async()=>{
- if(!confirm("Confirmer la fusion ? Les colonnes prévues seront mises à jour dans Table_ecoles et FusionEffectuee sera cochée dans les deux tables pour les lignes traitées."))return;
- try{
-  $("write").disabled=true;
-  // Mise à jour limitée aux colonnes prévues, plus le marqueur de fusion.
-  const ids=assignments.map(a=>a.row._id);
-  const values={
-   Enseignant:assignments.map(a=>a.teacher),
-   CodeParcours:assignments.map(a=>a.code),
-   NomParcours:assignments.map(a=>a.name),
-   PasseportMusique:assignments.map(a=>a.passport),
-    EffectifsClasse:assignments.map(a=>a.effectifs),
-    Mail:assignments.map(a=>text(a.mail)),
-    Telephone:assignments.map(a=>text(a.telephone)),
-   CoutParcours:assignments.map(a=>a.cout),
-   FusionEffectuee:assignments.map(()=>true)
-  };
-  for(const col of WRITE){
-   if(!values[col] || values[col].length!==ids.length) throw new Error("Données de mise à jour incomplètes pour la colonne "+col);
-  }
-  const wishIds=[...new Set(assignments.filter(a=>a.wishId!==undefined && a.wishId!==null).map(a=>a.wishId))];
-  const actions=[["BulkUpdateRecord",T_ECOLES,ids,values]];
-  if(wishIds.length) actions.push(["BulkUpdateRecord",T_VOEUX,wishIds,{FusionEffectuee:wishIds.map(()=>true)}]);
-  await grist.docApi.applyUserActions(actions);
-  const updatedCount=ids.length;
-  // Vider les données et décisions de la session terminée.
-  ecoles=null; voeux=null; assignments=[]; ambiguities=[]; decisions={}; current=0; output=[];
-  $("ambiguity").classList.add("hidden");
-  $("review").classList.add("hidden");
-  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+updatedCount+" classes marquées comme fusionnées dans Table_ecoles et "+wishIds.length+" vœux marqués comme fusionnés dans Table_voeux.";
-  $("restartPanel").classList.remove("hidden");
-  setStatus("Fusion terminée. Importez le prochain fichier dans Table_voeux, puis cliquez sur « Faire un nouvel import ».");
-  $("write").disabled=true;
- }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
-};
-$("restart").onclick=async()=>{
-  $("restart").disabled=true;
-  $("restart").textContent="Lecture des nouvelles données…";
-  try{
-    await loadData();
-  }finally{
-    $("restart").disabled=false;
-    $("restart").textContent="Faire un nouvel import";
-  }
-};
-load();
-</script>
-</body></html>
+function columnsToRecords(cols){if(!cols)return[];let keys=Object.keys(cols).filter(k=>Array.isArray(cols[k]));let n=keys.length?cols[keys[0]].length:0;let arr=[];for(let i=0;i<n;i++){let obj={};keys.forEach(k=>obj[k]=cols[k][i]);arr.push(obj);}return arr;}
+function fillSelect(id,values,all=true){let s=document.getElementById(id),old=s.value;s.innerHTML='';if(all){let o=document.createElement('option');o.value='ALL';o.textContent='Tous / Toutes';s.appendChild(o);} [...values].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'fr')).forEach(v=>{let o=document.createElement('option');o.value=v;o.textContent=v;s.appendChild(o);});if([...s.options].some(o=>o.value===old))s.value=old;}
+function fillMulti(id,values){let s=document.getElementById(id),previous=[...s.selectedOptions].map(o=>o.value);s.innerHTML='';[...values].sort((a,b)=>String(a).localeCompare(String(b),'fr')).forEach(v=>{let o=document.createElement('option');o.value=v;o.textContent=v;o.selected=previous.length?previous.includes(v):true;s.appendChild(o);});}
+function populateFilters(){let years=new Set(),schools=new Set(),cycles=new Set(),levels=new Set(),disc=new Set();ecolesRecords.forEach(r=>{if(r.AnneeScolaire)years.add(String(r.AnneeScolaire).trim());if(r.Ecole)schools.add(String(r.Ecole).trim());if(r.Cycle)cycles.add(String(r.Cycle).trim());extractValues(r.Niveau).forEach(x=>levels.add(x));if(isAssigned(r))getTypesForRecord(r).forEach(x=>disc.add(x));});fillSelect('filter-annee',years,false);fillSelect('filter-ecole',schools);fillSelect('filter-cycle',cycles);fillMulti('filter-niveau',levels);fillSelect('filter-discipline',disc);let y=document.getElementById('filter-annee');if(y.options.length&&!y.value)y.selectedIndex=0;updateDashboard();}
+function selectedLevels(){return [...document.getElementById('filter-niveau').selectedOptions].map(o=>o.value);}
+function getFiltered(){let y=document.getElementById('filter-annee').value,school=document.getElementById('filter-ecole').value,cy=document.getElementById('filter-cycle').value,lev=selectedLevels(),dis=document.getElementById('filter-discipline').value;return ecolesRecords.filter(r=>{if(y&&y!=='ALL'&&String(r.AnneeScolaire||'').trim()!==y)return false;if(school!=='ALL'&&String(r.Ecole||'').trim()!==school)return false;if(cy!=='ALL'&&String(r.Cycle||'').trim()!==cy)return false;let rowLevels=extractValues(r.Niveau);if(lev.length&&!rowLevels.some(l=>lev.includes(l)))return false;if(dis!=='ALL'&&dis&&!getTypesForRecord(r).includes(dis))return false;return true;});}
+function dispositif(r,key){let v=r[key];if(v==null||v===''||v===false||v===0||v==='0'||String(v).toLowerCase()==='false')return false;if(key==='PasseportMusique')return true;return valNum(v)>0||String(v).toLowerCase()==='true';}
+function updateDashboard(){if(!ecolesRecords.length)return;let rows=getFiltered(),stats={eac:{classes:0,eleves:0,cost:0},mus:{classes:0,eleves:0},cin:{classes:0,eleves:0},cho:{classes:0,eleves:0},cham:{classes:0,eleves:0}},group={};rows.forEach(r=>{let eff=valNum(r.EffectifsClasse),key=`${String(r.Ecole||'École non renseignée').trim()} (${String(r.Cycle||'Cycle non renseigné').trim()})`;group[key]??={school:String(r.Ecole||'').trim(),cycle:String(r.Cycle||'').trim(),classes:0,eleves:0,eac:0,cost:0,mus:0,cin:0,cho:0,cham:0,records:[]};let g=group[key];g.classes++;g.eleves+=eff;g.records.push(r);if(isAssigned(r)){g.eac++;g.cost+=valNum(r.CoutParcours);stats.eac.classes++;stats.eac.eleves+=eff;stats.eac.cost+=valNum(r.CoutParcours);}if(dispositif(r,'PasseportMusique')){g.mus++;stats.mus.classes++;stats.mus.eleves+=eff;}if(dispositif(r,'Ecole_Cinema')){g.cin++;stats.cin.classes++;stats.cin.eleves+=eff;}if(dispositif(r,'Chorale_CRR93')){g.cho++;stats.cho.classes++;stats.cho.eleves+=eff;}if(dispositif(r,'Sensibilisation_CHAM_CHAT')){g.cham++;stats.cham.classes++;stats.cham.eleves+=eff;}});
+ document.getElementById('kpi-parcours-classes').textContent=stats.eac.classes+' classes';document.getElementById('kpi-parcours-eleves').textContent=stats.eac.eleves.toLocaleString('fr-FR')+' élèves';document.getElementById('kpi-budget-parcours').textContent=money(stats.eac.cost);
+ [['mus','passmusique'],['cin','cinema'],['cho','chorale'],['cham','cham']].forEach(([k,id])=>{document.getElementById(`kpi-${id}-classes`).textContent=stats[k].classes+' classes';document.getElementById(`kpi-${id}-eleves`).textContent=stats[k].eleves.toLocaleString('fr-FR')+' élèves';});
+ let tbody=document.getElementById('summary-table-body');tbody.innerHTML='';Object.entries(group).sort(([a],[b])=>a.localeCompare(b,'fr')).forEach(([key,g])=>{let tr=document.createElement('tr');tr.className='selectable'+(selectedSchoolKey===key?' selected':'');tr.onclick=(ev)=>openDetail(key,g,ev);tr.innerHTML=`<td><strong>${safeText(key)}</strong> <span class="hint">▸ détail</span></td><td><span class="badge">${g.classes}</span></td><td>${g.eleves}</td><td>${g.eac}</td><td><strong>${money(g.cost)}</strong></td><td>${g.mus}</td><td>${g.cin}</td><td>${g.cho}</td><td>${g.cham}</td>`;tbody.appendChild(tr);});if(selectedSchoolKey&&!group[selectedSchoolKey])closeDetail();}
+function openDetail(key,g,ev){selectedSchoolKey=key;document.querySelectorAll('#summary-table-body tr').forEach(tr=>tr.classList.remove('selected'));ev?.currentTarget?.classList?.add('selected');let assigned=g.records.filter(isAssigned);document.getElementById('detail-title').textContent=key;document.getElementById('detail-summary').innerHTML=`<span>🏫 ${g.classes} classes</span><span>👥 ${g.eleves} élèves</span><span>★ ${g.eac} parcours EAC</span><span>€ ${money(g.cost)}</span>`;let b=document.getElementById('detail-body');b.innerHTML='';assigned.forEach(r=>{let tr=document.createElement('tr');let niv=extractValues(r.Niveau).join(', ')||'—';let types=getTypesForRecord(r).join(', ')||'—';tr.innerHTML=`<td>${safeText(niv)}</td><td>${safeText(getName(r)||'Nom non renseigné')}</td><td>${safeText(types)}</td><td>${safeText(getPartner(r))}</td><td>${money(valNum(r.CoutParcours))}</td>`;b.appendChild(tr);});if(!assigned.length)b.innerHTML='<tr><td colspan="5" class="empty">Aucun parcours attribué pour ce groupe avec les filtres actuels.</td></tr>';document.getElementById('detail-note').innerHTML=`<strong>Résumé</strong><p>${g.eac} parcours attribués pour ${g.classes} classes.</p><p>Effectifs concernés : ${g.records.filter(isAssigned).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)} élèves.</p><p>Coût engagé : <strong>${money(g.cost)}</strong></p><p class="footnote">Les partenaires sont recherchés dans Table_voeux à partir du code parcours. En cas de plusieurs partenaires associés à un même code, ils sont tous affichés.</p>`;document.getElementById('detail-panel').classList.add('show');}
+function closeDetail(){selectedSchoolKey=null;document.getElementById('detail-panel').classList.remove('show');}
+// Export Excel compatible sans bibliothèque externe : classeur XML multi-feuilles (format .xls ouvrable dans Excel/LibreOffice).
+function xmlEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
+function sheetXml(name,rows){let out=`<Worksheet ss:Name="${xmlEsc(name.slice(0,31))}"><Table>`;rows.forEach(row=>{out+='<Row>';row.forEach(v=>{let numeric=typeof v==='number'&&Number.isFinite(v);out+=`<Cell><Data ss:Type="${numeric?'Number':'String'}">${xmlEsc(v)}</Data></Cell>`;});out+='</Row>';});return out+'</Table></Worksheet>';}
+function exportSynthesis(){let rows=getFiltered(),sum={eac:0,cost:0,mus:0,cin:0,cho:0,cham:0,classes:rows.length,pupils:0,schools:new Set()};rows.forEach(r=>{sum.pupils+=valNum(r.EffectifsClasse);sum.schools.add(r.Ecole);if(isAssigned(r)){sum.eac++;sum.cost+=valNum(r.CoutParcours);}if(dispositif(r,'PasseportMusique'))sum.mus++;if(dispositif(r,'Ecole_Cinema'))sum.cin++;if(dispositif(r,'Chorale_CRR93'))sum.cho++;if(dispositif(r,'Sensibilisation_CHAM_CHAT'))sum.cham++;});
+ let general=[['Indicateur','Valeur'],['Structures',sum.schools.size],['Classes',sum.classes],['Élèves',sum.pupils],['Classes avec parcours EAC',sum.eac],['Élèves concernés par EAC',rows.filter(isAssigned).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['Budget parcours EAC (€)',sum.cost],['Passeport Musique — classes',sum.mus],['Passeport Musique — élèves',rows.filter(r=>dispositif(r,'PasseportMusique')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['École & Cinéma — classes',sum.cin],['École & Cinéma — élèves',rows.filter(r=>dispositif(r,'Ecole_Cinema')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['Chorale CRR93 — classes',sum.cho],['Chorale CRR93 — élèves',rows.filter(r=>dispositif(r,'Chorale_CRR93')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['CHAM/CHAT — classes',sum.cham],['CHAM/CHAT — élèves',rows.filter(r=>dispositif(r,'Sensibilisation_CHAM_CHAT')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)]];
+ let bySchool=[['École','Cycle','Classes','Élèves','Classes EAC','Coût EAC (€)','Passeport Musique','École & Cinéma','Chorale CRR93','CHAM/CHAT']],detail=[['École','Cycle','Niveau/Classe','Effectifs','Code parcours','Nom parcours','Champ disciplinaire','Partenaire','Coût (€)','Statut attribution']];let groups={};rows.forEach(r=>{let k=[r.Ecole,r.Cycle].join('||');groups[k]??={ecole:r.Ecole,cycle:r.Cycle,classes:0,eleves:0,eac:0,cost:0,mus:0,cin:0,cho:0,cham:0};let g=groups[k];g.classes++;g.eleves+=valNum(r.EffectifsClasse);if(isAssigned(r)){g.eac++;g.cost+=valNum(r.CoutParcours);}if(dispositif(r,'PasseportMusique'))g.mus++;if(dispositif(r,'Ecole_Cinema'))g.cin++;if(dispositif(r,'Chorale_CRR93'))g.cho++;if(dispositif(r,'Sensibilisation_CHAM_CHAT'))g.cham++;let rank=getAssignedRank(r);detail.push([r.Ecole,r.Cycle,extractValues(r.Niveau).join(', '),valNum(r.EffectifsClasse),getCode(r),getName(r),getTypesForRecord(r).join(', '),getPartner(r),valNum(r.CoutParcours),isAssigned(r)?(rank||'Attribué — rang non identifié'):'Aucun parcours (code 0)']);});Object.values(groups).forEach(g=>bySchool.push([g.ecole,g.cycle,g.classes,g.eleves,g.eac,g.cost,g.mus,g.cin,g.cho,g.cham]));
+ let dispositifs=[['Dispositif','Classes concernées','Élèves concernés'],['Parcours EAC',sum.eac,rows.filter(isAssigned).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['Passeport Musique',sum.mus,rows.filter(r=>dispositif(r,'PasseportMusique')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['École & Cinéma',sum.cin,rows.filter(r=>dispositif(r,'Ecole_Cinema')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['Chorale CRR93',sum.cho,rows.filter(r=>dispositif(r,'Chorale_CRR93')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)],['CHAM/CHAT',sum.cham,rows.filter(r=>dispositif(r,'Sensibilisation_CHAM_CHAT')).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)]];
+ let voeux=[['Situation / rang','Classes','Élèves']];let assignedRows=rows.filter(isAssigned);let ranks={};assignedRows.forEach(r=>{let rank=getAssignedRank(r)||'Rang non identifié';ranks[rank]??={n:0,e:0};ranks[rank].n++;ranks[rank].e+=valNum(r.EffectifsClasse);});Object.entries(ranks).sort(([a],[b])=>a.localeCompare(b,'fr')).forEach(([r,d])=>voeux.push([r,d.n,d.e]));let noVoeu=rows.filter(r=>!hasAnyWish(r));voeux.push(['Code parcours 0 / aucun attribué',rows.filter(r=>!isAssigned(r)).length,rows.filter(r=>!isAssigned(r)).reduce((a,r)=>a+valNum(r.EffectifsClasse),0)]);voeux.push(['Voeux non renseignés détectables dans Table_ecoles',noVoeu.length,noVoeu.reduce((a,r)=>a+valNum(r.EffectifsClasse),0)]);
+ let xml='<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Default"><Alignment ss:Vertical="Center"/></Style></Styles>'+sheetXml('01 Synthèse générale',general)+sheetXml('02 École et cycle',bySchool)+sheetXml('03 Détail parcours EAC',detail)+sheetXml('04 Dispositifs',dispositifs)+sheetXml('05 Voeux et rangs',voeux)+'</Workbook>';
+ let blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Synthese_PEAC.xls';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
+function getAssignedRank(r){let keys=Object.keys(r);for(let k of keys){let nk=norm(k);if(/rang.*voeu|voeu.*rang|rangattribution|rangobtenu/.test(nk)){let v=String(r[k]??'').trim();if(v)return 'Vœu de rang '+v;}}for(let i=1;i<=8;i++){let candidates=keys.filter(k=>{let n=norm(k);return n===`voeu${i}`||n===`vœu${i}`||n===`rang${i}`||n===`rangvoeu${i}`;});for(let k of candidates){if(String(r[k]??'').trim()&&String(r[k]).trim()!=='0')return 'Vœu de rang '+i;}}return '';}
+function hasAnyWish(r){return Object.keys(r).some(k=>/voeu|vœu|rang/i.test(k)&&String(r[k]??'').trim()&&String(r[k]).trim()!=='0');}
+</script></body></html>
