@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
-<title>Module_fusion - Effectifs, Mail et Telephone</title>
+<title>Fusion des structures et des vœux</title>
 <style>
 body{font:14px system-ui, sans-serif;margin:18px;color:#222}h2{margin:0 0 10px}
 button{padding:8px 13px;margin:5px 5px 5px 0;cursor:pointer;border:1px solid #aaa;border-radius:6px;background:#f7f7f7}
@@ -17,7 +17,17 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
 </style>
 </head>
 <body>
-<h2>Fusion des vœux vers les classes</h2>
+<h2>Fusion des structures des écoles avec les vœux émis et les parcours attribués</h2>
+<div class="panel">
+ <b>Rappel de la procédure à suivre</b>
+ <ol>
+  <li>Intégrer l’ensemble des classes connues dans <b>Table_ecoles</b> pour l’année concernée et vérifier que la colonne <b>FusionEffectuee</b> n’est pas cochée.</li>
+  <li>Importer les données de l’année concernée dans <b>Table_voeux</b> à l’aide de l’outil d’import de cette table.</li>
+  <li>Lancer le présent module de fusion et traiter, le cas échéant, les situations signalées ci-dessous.</li>
+ </ol>
+ <p class="small">La fusion met à jour les informations prévues dans Table_ecoles. Elle ne crée ni ne supprime aucune classe.</p>
+</div>
+<h3>Synthèse des données présentes dans Table_ecoles et Table_voeux en attente de fusion</h3>
 <div id="status" class="status">Connexion à GRIST…</div>
 <div id="app" class="hidden">
   <div id="summary" class="panel"></div>
@@ -35,17 +45,20 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
   <div id="review" class="panel hidden">
     <h3>Prévisualisation des modifications</h3>
     <p id="reviewText"></p>
-    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Coût du parcours</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
     <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
     <button id="back">Revenir aux choix</button>
     <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
   </div>
 </div>
+<div class="panel warn">
+ <b>Attention</b> : les dispositifs Ecole&amp;Cinema, Chorale CRR93 et Sensibilisation CHAM/CHAT doivent être saisis manuellement par l’utilisateur. Cette saisie peut conduire à remplacer les libellés provisoires « Enseignant inconnu A », « Enseignant inconnu B », etc., et à modifier les effectifs. Elle ne doit en aucun cas faire évoluer le nombre total de classes.
+</div>
 <script>
 const $=id=>document.getElementById(id);
 const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
 const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
-const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone"];
+const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours"];
 let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
 let output=[];
 function val(col,i){return col && col[i]!==undefined ? col[i] : null}
@@ -83,7 +96,7 @@ function numericOrNull(v, field){
 }
 function getWishInfo(w){
  return {teacher:teacherOf(w),code:text(w.CodeParcours),name:text(w.NomParcours),
-  effectifs:numericOrNull(w.EffectifsClasse,"EffectifsClasse"),mail:text(w.Mail),telephone:text(w.Telephone)};
+  effectifs:numericOrNull(w.EffectifsClasse,"EffectifsClasse"),mail:text(w.Mail),telephone:text(w.Telephone),cout:w.CoutParcours};
 }
 function groupKey(r){return [r.AnneeScolaire,r.Cycle,r.Ecole,levels(r.Niveau).join("+")].map(norm).join("|")}
 function passport(r){return levels(r.Niveau).some(v=>["GS","CP","CE1"].includes(norm(v).toUpperCase()))}
@@ -115,7 +128,7 @@ async function loadData(){
   voeux=await grist.docApi.fetchTable(T_VOEUX);
 
   validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
-  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone"]);
+  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours"]);
 
   prepare();
   setStatus("Lecture réussie : "+ecoles.id.length+" classes et "+voeux.id.length+" vœux.");
@@ -140,7 +153,7 @@ function prepare(){
  ambiguities=[];decisions={};current=0;
  const E=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
  const V=voeux.id.map((_,i)=>rowFrom(voeux,i));
- assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,passport:passport(r),source:""}));
+ assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,cout:r.CoutParcours,passport:passport(r),source:""}));
  const used=new Set();
  const wishes=V.filter(w=>teacherOf(w));
  // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
@@ -148,7 +161,7 @@ function prepare(){
   const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
   if(candidates.length){
    const a=candidates[0],info=getWishInfo(w);used.add(a.row._id);
-   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,source:"Correspondance exacte"});
+   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,cout:info.cout,source:"Correspondance exacte"});
   }else{
    const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
    ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
@@ -166,7 +179,7 @@ function prepare(){
    a.source="À compléter";
   }
  }
- $("summary").innerHTML="<b>"+E.length+" classes lues</b><br>"+wishes.length+" vœux avec enseignant<br>"+(wishes.length-ambiguities.length)+" affectations exactes<br>"+ambiguities.length+" situations à vérifier individuellement.";
+ $("summary").innerHTML="<b>Situation sans problématique particulière — "+(wishes.length-ambiguities.length)+" / "+wishes.length+"</b><br>"+(wishes.length-ambiguities.length)+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Tous les vœux avec enseignant ont une correspondance exacte.");
  if(ambiguities.length){showAmbiguity(0)}else showReview();
 }
 function showAmbiguity(i){
@@ -205,23 +218,26 @@ function showReview(){
  ambiguities.forEach((a,i)=>{
   const id=decisions[i];if(!id)return;
   const target=assignments.find(x=>x.row._id===Number(id)||String(x.row._id)===String(id));
-  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.source="Choix validé";}
+  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.cout=a.info.cout;target.source="Choix validé";}
  });
  $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
- $("reviewText").textContent="Les valeurs ci-dessous sont une prévisualisation. EffectifsClasse (numérique), Mail et Telephone (texte) sont repris de Table_voeux pour chaque classe affectée, automatiquement ou après validation manuelle. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour GS, CP et CE1.";
+ const wishesCount=assignedCount+ambiguities.length;
+ const assignedCount=assignments.filter(a=>a.source==="Correspondance exacte"||a.source==="Choix validé").length;
+ $("summary").innerHTML="<b>Situation sans problématique particulière — "+assignedCount+" / "+wishesCount+"</b><br>"+assignedCount+" vœux et parcours ont été placés dans Table_ecoles, automatiquement ou après validation individuelle."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+" / "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées.":"");
+ $("reviewText").textContent="Prévisualisation avant écriture : Enseignant, CodeParcours, NomParcours, EffectifsClasse, Mail, Telephone et CoutParcours sont repris de Table_voeux pour chaque classe affectée. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour les classes comprenant GS, CP ou CE1.";
  $("rows").innerHTML="";
  assignments.forEach(a=>{
   const tr=document.createElement("tr");
-  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
+  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.cout,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
   $("rows").append(tr);
  });
  $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
 }
 $("write").onclick=async()=>{
- if(!confirm("Confirmer l’écriture des sept colonnes prévues dans Table_ecoles ? Cette action modifiera les données."))return;
+ if(!confirm("Confirmer l’écriture des huit colonnes prévues dans Table_ecoles ? Cette action modifiera les données."))return;
  try{
   $("write").disabled=true;
-  // Mise à jour limitée aux sept colonnes prévues.
+  // Mise à jour limitée aux huit colonnes prévues.
   const ids=assignments.map(a=>a.row._id);
   const values={
    Enseignant:assignments.map(a=>a.teacher),
@@ -230,7 +246,8 @@ $("write").onclick=async()=>{
    PasseportMusique:assignments.map(a=>a.passport),
     EffectifsClasse:assignments.map(a=>a.effectifs),
     Mail:assignments.map(a=>text(a.mail)),
-    Telephone:assignments.map(a=>text(a.telephone))
+    Telephone:assignments.map(a=>text(a.telephone)),
+   CoutParcours:assignments.map(a=>a.cout)
   };
   for(const col of WRITE){
    if(!values[col] || values[col].length!==ids.length) throw new Error("Données de mise à jour incomplètes pour la colonne "+col);
