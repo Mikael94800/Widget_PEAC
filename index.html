@@ -1,525 +1,287 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tableau de Bord PEAC & Budget — Grist Widget</title>
-  
-  <!-- API Grist officielle -->
-  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-
-  <style>
-    :root {
-      --primary: #1A365D;
-      --secondary: #2B6CB0;
-      --accent: #319795;
-      --bg: #F7FAFC;
-      --card-bg: #FFFFFF;
-      --text: #2D3748;
-      --border: #E2E8F0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
-      margin: 0;
-      padding: 16px;
-      box-sizing: border-box;
-    }
-
-    h2 {
-      color: var(--primary);
-      margin-top: 16px;
-      margin-bottom: 12px;
-      font-size: 1.15rem;
-    }
-
-    /* BARRE DE FILTRES */
-    .filters-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      background: var(--card-bg);
-      padding: 12px 16px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      align-items: flex-end;
-    }
-
-    .filter-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1;
-      min-width: 140px;
-    }
-
-    .filter-group label {
-      font-size: 0.7rem;
-      font-weight: bold;
-      color: #718096;
-      text-transform: uppercase;
-    }
-
-    .filter-group select {
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background-color: #FFF;
-      font-size: 0.85rem;
-      color: var(--text);
-    }
-
-    /* Style spécifique pour le select multiple des niveaux */
-    select[multiple] {
-      height: 75px;
-      background-color: #FFF;
-    }
-
-    .hint-text {
-      font-size: 0.65rem;
-      color: #a0aec0;
-      margin-top: 2px;
-    }
-
-    /* CARTES KPI */
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-
-    .kpi-card {
-      background: var(--card-bg);
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      border-left: 4px solid var(--secondary);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-
-    .kpi-card.budget {
-      border-left-color: var(--accent);
-    }
-
-    .kpi-title {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #4A5568;
-      margin-bottom: 4px;
-    }
-
-    .kpi-value {
-      font-size: 1.25rem;
-      font-weight: bold;
-      color: var(--primary);
-    }
-
-    .kpi-card.budget .kpi-value {
-      color: var(--accent);
-    }
-
-    .kpi-sub {
-      font-size: 0.7rem;
-      font-weight: normal;
-      color: #718096;
-      margin-top: 2px;
-    }
-
-    /* TABLEAU RECAP */
-    .table-container {
-      background: var(--card-bg);
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      overflow-x: auto;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.8rem;
-    }
-
-    th, td {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    th {
-      background-color: #EDF2F7;
-      color: var(--primary);
-      font-weight: bold;
-      position: sticky;
-      top: 0;
-    }
-
-    tr:hover {
-      background-color: #F7FAFC;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 0.7rem;
-      font-weight: bold;
-      background: #E2E8F0;
-      color: #2D3748;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
+<title>Fusion des structures et des vœux</title>
+<style>
+body{font:14px system-ui, sans-serif;margin:18px;color:#222}h2{margin:0 0 10px}
+button{padding:8px 13px;margin:5px 5px 5px 0;cursor:pointer;border:1px solid #aaa;border-radius:6px;background:#f7f7f7}
+button.primary{background:#185abc;color:white;border-color:#185abc}button:disabled{opacity:.4;cursor:not-allowed}
+.panel{padding:12px;border:1px solid #ddd;border-radius:8px;margin:12px 0}
+.status{padding:9px;background:#f2f5f8;border-radius:6px;white-space:pre-wrap}
+.small{color:#555;font-size:12px}.choices label{display:block;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;text-align:left;padding:6px}
+.hidden{display:none}.warn{color:#9b4b00}.good{color:#176b35}
+</style>
 </head>
 <body>
-
-  <h2>📊 Synthèse PEAC, Dispositifs & Budget</h2>
-
-  <!-- FILTRES CROISÉS -->
-  <div class="filters-bar">
-    <div class="filter-group">
-      <label for="filter-annee">Année Scolaire</label>
-      <select id="filter-annee" onchange="updateDashboard()"></select>
-    </div>
-    <div class="filter-group">
-      <label for="filter-ecole">École</label>
-      <select id="filter-ecole" onchange="updateDashboard()"><option value="ALL">Toutes</option></select>
-    </div>
-    <div class="filter-group">
-      <label for="filter-cycle">Cycle</label>
-      <select id="filter-cycle" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
-    </div>
-    <div class="filter-group">
-      <label for="filter-niveau">Niveau (Multisélection)</label>
-      <select id="filter-niveau" multiple onchange="updateDashboard()"></select>
-      <span class="hint-text">Maintenez Ctrl (ou Cmd) pour en sélectionner plusieurs</span>
-    </div>
-    <div class="filter-group">
-      <label for="filter-discipline">Champ Disciplinaire</label>
-      <select id="filter-discipline" onchange="updateDashboard()"><option value="ALL">Tous</option></select>
-    </div>
+<h2>Fusion des structures des écoles avec les vœux émis et les parcours attribués</h2>
+<div class="panel">
+ <b>Rappel de la procédure à suivre</b>
+ <ol>
+  <li>Intégrer l’ensemble des classes connues dans <b>Table_ecoles</b> pour l’année concernée et vérifier que la colonne <b>FusionEffectuee</b> n’est pas cochée.</li>
+  <li>Importer les données de l’année concernée dans <b>Table_voeux</b> à l’aide de l’outil d’import de cette table.</li>
+  <li>Lancer le présent module de fusion et traiter, le cas échéant, les situations signalées ci-dessous.</li>
+ </ol>
+ <p class="small">La fusion met à jour les informations prévues dans Table_ecoles. Elle ne crée ni ne supprime aucune classe.</p>
+</div>
+<h3>Synthèse des données présentes dans Table_ecoles et Table_voeux en attente de fusion</h3>
+<div id="status" class="status">Connexion à GRIST…</div>
+<div id="app" class="hidden">
+  <div id="summary" class="panel"></div>
+  <div id="restartPanel" class="panel hidden">
+    <b>Fusion terminée.</b>
+    <p>Importez d’abord le nouveau fichier dans Table_voeux. Ensuite, cliquez ici pour relancer une fusion à partir des nouvelles données.</p>
+    <button id="restart" class="primary">Faire un nouvel import</button>
   </div>
-
-  <!-- CARTES KPI -->
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-title">Parcours EAC</div>
-      <div class="kpi-value" id="kpi-parcours-classes">0 cl.</div>
-      <div class="kpi-sub" id="kpi-parcours-eleves">0 élèves</div>
-    </div>
-    <div class="kpi-card budget">
-      <div class="kpi-title">Coût Parcours EAC</div>
-      <div class="kpi-value" id="kpi-budget-parcours">0 €</div>
-      <div class="kpi-sub">Total engagé</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-title">Passeport Musique</div>
-      <div class="kpi-value" id="kpi-passmusique-classes">0 cl.</div>
-      <div class="kpi-sub" id="kpi-passmusique-eleves">0 élèves</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-title">École & Cinéma</div>
-      <div class="kpi-value" id="kpi-cinema-classes">0 cl.</div>
-      <div class="kpi-sub" id="kpi-cinema-eleves">0 élèves</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-title">Chorale CRR93</div>
-      <div class="kpi-value" id="kpi-chorale-classes">0 cl.</div>
-      <div class="kpi-sub" id="kpi-chorale-eleves">0 élèves</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-title">CHAM / CHAT</div>
-      <div class="kpi-value" id="kpi-cham-classes">0 cl.</div>
-      <div class="kpi-sub" id="kpi-cham-eleves">0 élèves</div>
-    </div>
+  <div id="ambiguity" class="panel hidden">
+    <strong id="ambTitle"></strong>
+    <p id="ambText"></p>
+    <div id="ambChoices" class="choices"></div>
+    <button id="prev">Précédent</button><button id="next" class="primary">Valider et suivant</button>
   </div>
-
-  <!-- TABLEAU RÉCAPITULATIF PAR ÉCOLE -->
-  <h2>🏫 Répartition & Suivi Budgétaire par École</h2>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>École & Cycle</th>
-          <th>Classes</th>
-          <th>Élèves</th>
-          <th>Parcours EAC</th>
-          <th>Coût Parcours</th>
-          <th>Passeport Musique</th>
-          <th>École & Cinéma</th>
-          <th>Chorale</th>
-          <th>CHAM/CHAT</th>
-        </tr>
-      </thead>
-      <tbody id="summary-table-body">
-        <!-- Rempli dynamiquement -->
-      </tbody>
-    </table>
+  <div id="review" class="panel hidden">
+    <h3>Prévisualisation des modifications</h3>
+    <p id="reviewText"></p>
+    <div style="max-height:330px;overflow:auto"><table><thead><tr><th>Classe</th><th>École</th><th>Niveau</th><th>Enseignant</th><th>Code</th><th>Parcours</th><th>Effectifs</th><th>Mail</th><th>Téléphone</th><th>Coût du parcours</th><th>Statut</th><th>Passeport</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <p class="warn">Aucune donnée n'a encore été modifiée. Vérifiez le tableau avant de confirmer.</p>
+    <button id="back">Revenir aux choix</button>
+    <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
   </div>
+</div>
+<div class="panel warn">
+ <b>Attention</b> : les dispositifs Ecole&amp;Cinema, Chorale CRR93 et Sensibilisation CHAM/CHAT doivent être saisis manuellement par l’utilisateur. Cette saisie peut conduire à remplacer les libellés provisoires « Enseignant inconnu A », « Enseignant inconnu B », etc., et à modifier les effectifs. Elle ne doit en aucun cas faire évoluer le nombre total de classes.
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
+const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
+const WRITE=["Enseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours","FusionEffectuee"];
+let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
+let output=[];
+function val(col,i){return col && col[i]!==undefined ? col[i] : null}
+function text(v){
+ if(v===null||v===undefined)return "";
+ if(Array.isArray(v))return v.map(text).join(" / ");
+ if(typeof v==="object" && v.value!==undefined)return String(v.value);
+ return String(v);
+}
+function choiceList(v){
+ if(Array.isArray(v) && v[0]==="L") return v.slice(1).map(text);
+ if(Array.isArray(v)) return v.map(text);
+ if(v===null||v===undefined||v==="")return [];
+ return [text(v)];
+}
+function norm(v){return text(v).trim().toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g,"")}
+function isChecked(v){return v===true || v===1 || v==="true"}
+function pendingYears(E,V){return [...new Set([...E,...V].map(r=>text(r.AnneeScolaire).trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr",{numeric:true}));}
+function levels(v){return choiceList(v).map(x=>x.trim()).filter(Boolean)}
+function firstLevel(arr){return arr[0]||""}
+function keyValue(row,field){return norm(row[field])}
+function rowFrom(data,i){
+ const r={_id:data.id[i]};
+ for(const k of Object.keys(data)) if(k!=="id")r[k]=data[k][i];
+ return r;
+}
+function sameBase(a,b){return F.slice(0,3).every(f=>keyValue(a,f)===keyValue(b,f))}
+function sameLevels(a,b){const x=levels(a.Niveau).map(norm).sort(),y=levels(b.Niveau).map(norm).sort();return x.length===y.length&&x.every((v,i)=>v===y[i])}
+function levelOverlap(a,b){const x=levels(a.Niveau).map(norm),y=levels(b.Niveau).map(norm);return x.some(v=>y.includes(v))}
+function teacherOf(r){return text(r.Enseignant||r.NomEnseignant||r.Professeur).trim()}
+function numericOrNull(v, field){
+ if(v===null || v===undefined || v==="") return null;
+ if(typeof v==="number" && Number.isFinite(v)) return v;
+ const n=Number(String(v).trim().replace(/\s/g,"").replace(",","."));
+ if(!Number.isFinite(n)) throw new Error("Valeur non numérique dans Table_voeux."+field+" : "+text(v));
+ return n;
+}
+function getWishInfo(w){
+ return {teacher:teacherOf(w),code:text(w.CodeParcours),name:text(w.NomParcours),
+  effectifs:numericOrNull(w.EffectifsClasse,"EffectifsClasse"),mail:text(w.Mail),telephone:text(w.Telephone),cout:w.CoutParcours};
+}
+function groupKey(r){return [r.AnneeScolaire,r.Cycle,r.Ecole,levels(r.Niveau).join("+")].map(norm).join("|")}
+function passport(r){return levels(r.Niveau).some(v=>["GS","CP","CE1"].includes(norm(v).toUpperCase()))}
+function setStatus(s){$("status").textContent=s}
+function validateColumns(data,table,required){
+ const missing=required.filter(c=>!Object.prototype.hasOwnProperty.call(data,c));
+ if(missing.length)throw new Error("Dans "+table+", colonne(s) introuvable(s) : "+missing.join(", "));
+}
+let isLoading=false;
+async function loadData(){
+ if(isLoading)return;
+ isLoading=true;
+ try{
+  setStatus("Lecture des tables GRIST…");
+  $("app").classList.remove("hidden");
+  $("restartPanel").classList.add("hidden");
+  $("ambiguity").classList.add("hidden");
+  $("review").classList.add("hidden");
+  $("write").disabled=false;
+  $("write").textContent="Confirmer l’écriture dans Table_ecoles";
+  $("summary").textContent="Lecture des nouvelles données…";
 
-  <script>
-    let ecolesRecords = [];
-    let voeuxMap = {};     
-    let parcoursMap = {};  
-    let relatedTablesLoaded = false;
-    let relatedTablesPromise = null;
+  // Vider intégralement l'état de la fusion précédente avant toute nouvelle lecture.
+  ecoles=null;voeux=null;assignments=[];ambiguities=[];decisions={};current=0;output=[];
 
-    grist.ready({ requiredAccess: 'full' });
+  console.log("[Module_fusion] lecture Table_ecoles");
+  ecoles=await grist.docApi.fetchTable(T_ECOLES);
+  console.log("[Module_fusion] lecture Table_voeux");
+  voeux=await grist.docApi.fetchTable(T_VOEUX);
 
-    grist.onRecords(async function(records) {
-      ecolesRecords = records || [];
-      await fetchRelatedTables();
-      populateFilters(ecolesRecords);
-    });
+  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
+  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours","FusionEffectuee"]);
 
-    // Les tables de référence sont chargées une seule fois. Les actualisations
-    // de Table_ecoles ne déclenchent donc plus de nouveaux appels réseau.
-    async function fetchRelatedTables() {
-      if (relatedTablesLoaded) return;
-      if (relatedTablesPromise) return relatedTablesPromise;
-      relatedTablesPromise = (async () => {
-        try {
-          const voeuxRows = await grist.docApi.fetchTable('Table_voeux');
-          voeuxMap = {};
-          if (voeuxRows && voeuxRows.CodeParcours) {
-            for (let i = 0; i < voeuxRows.CodeParcours.length; i++) {
-              const code = String(voeuxRows.CodeParcours[i] ?? '').trim();
-              const partenaire = String(voeuxRows.Partenaire?.[i] ?? '').trim();
-              if (code && partenaire) {
-                if (!voeuxMap[code]) voeuxMap[code] = new Set();
-                voeuxMap[code].add(partenaire);
-              }
-            }
-          }
-        } catch (e) { console.warn('Table_voeux non trouvée ou vide', e); }
-
-        try {
-          const parcoursRows = await grist.docApi.fetchTable('Table_parcours');
-          parcoursMap = {};
-          if (parcoursRows && parcoursRows.NomParcours) {
-            for (let i = 0; i < parcoursRows.NomParcours.length; i++) {
-              const nom = String(parcoursRows.NomParcours[i] ?? '').trim();
-              const types = extractValues(parcoursRows.TypeParcours?.[i]);
-              if (nom) parcoursMap[normKey(nom)] = { typeParcours: types };
-            }
-          }
-        } catch (e) { console.warn('Table_parcours non trouvée ou vide', e); }
-        relatedTablesLoaded = true;
-      })();
-      return relatedTablesPromise;
-    }
-
-    function normKey(value) {
-      return String(value ?? '').trim().toLocaleLowerCase('fr');
-    }
-
-    function extractValues(val) {
-      if (val === null || val === undefined || val === '') return [];
-      if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
-      // Les choix multiples Grist peuvent être transmis sous forme de tableau ou de chaîne.
-      return String(val).split(',').map(v => v.trim()).filter(Boolean);
-    }
-
-    function populateFilters(records) {
-      const annees = new Set();
-      const ecoles = new Set();
-      const cycles = new Set();
-      const niveaux = new Set();
-      const disciplines = new Set();
-
-      records.forEach(r => {
-        if (r.AnneeScolaire) annees.add(String(r.AnneeScolaire).trim());
-        if (r.Ecole) ecoles.add(String(r.Ecole).trim());
-        if (r.Cycle) cycles.add(String(r.Cycle).trim());
-        
-        // Extraction propre pour les choix multiples de niveaux
-        const nivList = extractValues(r.Niveau);
-        nivList.forEach(n => niveaux.add(n));
-
-        const nomParcours = String(r.NomParcours || '').trim();
-        const infosParcours = parcoursMap[normKey(nomParcours)];
-        if (infosParcours) infosParcours.typeParcours.forEach(t => disciplines.add(t));
-      });
-
-      fillSelect('filter-annee', annees, false);
-      fillSelect('filter-ecole', ecoles, true);
-      fillSelect('filter-cycle', cycles, true);
-      fillMultiSelect('filter-niveau', niveaux); // Remplissage spécifique multi-select
-      fillSelect('filter-discipline', disciplines, true);
-
-      const anneeSelect = document.getElementById('filter-annee');
-      if (anneeSelect.options.length > 0 && !anneeSelect.value) {
-        anneeSelect.selectedIndex = 0;
-      }
-
-      updateDashboard();
-    }
-
-    function fillSelect(elemId, setValues, addAllOption) {
-      const select = document.getElementById(elemId);
-      const currentVal = select.value;
-      select.innerHTML = '';
-      
-      if (addAllOption) {
-        const optAll = document.createElement('option');
-        optAll.value = 'ALL';
-        optAll.textContent = 'Tous / Toutes';
-        select.appendChild(optAll);
-      }
-
-      Array.from(setValues).sort().forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        select.appendChild(opt);
-      });
-
-      if (currentVal && Array.from(setValues).includes(currentVal)) {
-        select.value = currentVal;
-      }
-    }
-
-    function fillMultiSelect(elemId, setValues) {
-      const select = document.getElementById(elemId);
-      // Conserve les éléments déjà sélectionnés si possible
-      const selectedValues = Array.from(select.selectedOptions).map(o => o.value);
-      select.innerHTML = '';
-
-      // Option "Tous" virtuelle (si rien n'est sélectionné ou explicite)
-      Array.from(setValues).sort().forEach(val => {
-        const opt = document.createElement('option');
-        opt.value = val;
-        opt.textContent = val;
-        if (selectedValues.length === 0 || selectedValues.includes(val)) {
-          // Par défaut, tout sélectionner pour ne pas filtrer à vide au premier chargement
-          opt.selected = true;
-        }
-        select.appendChild(opt);
-      });
-    }
-
-    function updateDashboard() {
-      const selAnnee = document.getElementById('filter-annee').value;
-      const selEcole = document.getElementById('filter-ecole').value;
-      const selCycle = document.getElementById('filter-cycle').value;
-      
-      const niveauSelect = document.getElementById('filter-niveau');
-      const selectedNiveaux = Array.from(niveauSelect.selectedOptions).map(o => o.value);
-
-      const selDisc = document.getElementById('filter-discipline').value;
-
-      const filtered = ecolesRecords.filter(r => {
-        const annee = String(r.AnneeScolaire || '').trim();
-        const ecole = String(r.Ecole || '').trim();
-        const cycle = String(r.Cycle || '').trim();
-        
-        const rowNiveaux = extractValues(r.Niveau);
-
-        const nomParcours = String(r.NomParcours || '').trim();
-        const typesDisc = parcoursMap[normKey(nomParcours)]?.typeParcours || [];
-        const disc = typesDisc.length ? typesDisc : ['Non renseigné'];
-
-        if (selAnnee && selAnnee !== 'ALL' && annee !== selAnnee) return false;
-        if (selEcole && selEcole !== 'ALL' && ecole !== selEcole) return false;
-        if (selCycle && selCycle !== 'ALL' && cycle !== selCycle) return false;
-        
-        // Filtre multi-niveaux : la classe doit contenir au moins l'un des niveaux sélectionnés
-        if (selectedNiveaux.length > 0) {
-          const matchNiveau = rowNiveaux.some(n => selectedNiveaux.includes(n));
-          if (!matchNiveau) return false;
-        }
-
-        if (selDisc && selDisc !== 'ALL' && !disc.includes(selDisc)) return false;
-        return true;
-      });
-
-      let stats = {
-        parcours: { classes: 0, eleves: 0, budget: 0 },
-        passMusique: { classes: 0, eleves: 0 },
-        cinema: { classes: 0, eleves: 0 },
-        chorale: { classes: 0, eleves: 0 },
-        cham: { classes: 0, eleves: 0 }
-      };
-
-      const schoolMap = {};
-
-      filtered.forEach(r => {
-        const eff = Number(r.EffectifsClasse) || 0;
-        const ecoleName = String(r.Ecole || 'Non renseignée').trim();
-        const cycleName = String(r.Cycle || 'Cycle non renseigné').trim();
-        
-        const schoolKey = `${ecoleName} (${cycleName})`;
-        const code = String(r.CodeParcours || '').trim();
-
-        if (!schoolMap[schoolKey]) {
-          schoolMap[schoolKey] = { classes: 0, eleves: 0, eac: 0, budget: 0, mus: 0, cin: 0, cho: 0, cham: 0 };
-        }
-        schoolMap[schoolKey].classes += 1;
-        schoolMap[schoolKey].eleves += eff;
-
-        const hasParcours = Boolean(code && code !== '0' && code.toLowerCase() !== 'null' && code.toLowerCase() !== 'undefined');
-        const hasPassMusique = Boolean(r.PasseportMusique && r.PasseportMusique !== 'false');
-        const hasCinema = Boolean(r.Ecole_Cinema && Number(r.Ecole_Cinema) > 0);
-        const hasChorale = Boolean(r.Chorale_CRR93 && Number(r.Chorale_CRR93) > 0);
-        const hasCham = Boolean(r.Sensibilisation_CHAM_CHAT && Number(r.Sensibilisation_CHAM_CHAT) > 0);
-
-        if (hasParcours) {
-          stats.parcours.classes++;
-          stats.parcours.eleves += eff;
-          schoolMap[schoolKey].eac++;
-
-          const cout = Number(r.CoutParcours) || 0;
-          stats.parcours.budget += cout;
-          schoolMap[schoolKey].budget += cout;
-        }
-
-        if (hasPassMusique) { stats.passMusique.classes++; stats.passMusique.eleves += eff; schoolMap[schoolKey].mus++; }
-        if (hasCinema) { stats.cinema.classes++; stats.cinema.eleves += eff; schoolMap[schoolKey].cin++; }
-        if (hasChorale) { stats.chorale.classes++; stats.chorale.eleves += eff; schoolMap[schoolKey].cho++; }
-        if (hasCham) { stats.cham.classes++; stats.cham.eleves += eff; schoolMap[schoolKey].cham++; }
-      });
-
-      // Affichage des KPI
-      document.getElementById('kpi-parcours-classes').textContent = `${stats.parcours.classes} cl.`;
-      document.getElementById('kpi-parcours-eleves').textContent = `${stats.parcours.eleves} élèves`;
-      document.getElementById('kpi-budget-parcours').textContent = `${stats.parcours.budget.toLocaleString()} €`;
-
-      document.getElementById('kpi-passmusique-classes').textContent = `${stats.passMusique.classes} cl.`;
-      document.getElementById('kpi-passmusique-eleves').textContent = `${stats.passMusique.eleves} élèves`;
-
-      document.getElementById('kpi-cinema-classes').textContent = `${stats.cinema.classes} cl.`;
-      document.getElementById('kpi-cinema-eleves').textContent = `${stats.cinema.eleves} élèves`;
-
-      document.getElementById('kpi-chorale-classes').textContent = `${stats.chorale.classes} cl.`;
-      document.getElementById('kpi-chorale-eleves').textContent = `${stats.chorale.eleves} élèves`;
-
-      document.getElementById('kpi-cham-classes').textContent = `${stats.cham.classes} cl.`;
-      document.getElementById('kpi-cham-eleves').textContent = `${stats.cham.eleves} élèves`;
-
-      // Tableau récapitulatif par école dissociée
-      const tbody = document.getElementById('summary-table-body');
-      tbody.innerHTML = '';
-
-      Object.keys(schoolMap).sort().forEach(sKey => {
-        const d = schoolMap[sKey];
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><strong>${sKey}</strong></td>
-          <td><span class="badge">${d.classes}</span></td>
-          <td>${d.eleves}</td>
-          <td>${d.eac} cl.</td>
-          <td><strong>${d.budget.toLocaleString()} €</strong></td>
-          <td>${d.mus} cl.</td>
-          <td>${d.cin} cl.</td>
-          <td>${d.cho} cl.</td>
-          <td>${d.cham} cl.</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-  </script>
-</body>
-</html>
+  const pendingE=ecoles.id.map((_,i)=>rowFrom(ecoles,i)).filter(r=>!isChecked(r.FusionEffectuee));
+  const pendingV=voeux.id.map((_,i)=>rowFrom(voeux,i)).filter(r=>!isChecked(r.FusionEffectuee));
+  const years=pendingYears(pendingE,pendingV);
+  prepare(pendingE,pendingV);
+  setStatus("Lecture des tables réussies : "+pendingE.length+" classes, "+pendingV.filter(w=>teacherOf(w)).length+" vœux émis, sur les années scolaires "+(years.length?years.join(", "):"aucune année en attente")+".");
+ }catch(e){
+  setStatus("ERREUR : "+(e.message||e));
+  console.error("[Module_fusion]",e);
+ }finally{
+  isLoading=false;
+ }
+}
+function load(){
+ try{
+  setStatus("Connexion à GRIST…");
+  grist.ready({requiredAccess:"full"});
+  loadData();
+ }catch(e){
+  setStatus("ERREUR : "+(e.message||e));
+  console.error("[Module_fusion]",e);
+ }
+}
+function prepare(E,V){
+ ambiguities=[];decisions={};current=0;
+ assignments=E.map(r=>({row:r,teacher:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,cout:r.CoutParcours,passport:passport(r),source:""}));
+ const used=new Set();
+ const wishes=V.filter(w=>teacherOf(w));
+ // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
+ for(const w of wishes){
+  const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
+  if(candidates.length){
+   const a=candidates[0],info=getWishInfo(w);used.add(a.row._id);
+   Object.assign(a,{teacher:info.teacher,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,cout:info.cout,wishId:w._id,source:"Correspondance exacte"});
+  }else{
+   const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
+   ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
+  }
+ }
+ // Les choix manuels sont présentés un par un. On ne présélectionne jamais une classe.
+ ambiguities=ambiguities.map((a,i)=>({...a,index:i}));
+ // Les classes sans enseignant reçoivent une étiquette provisoire par école/niveau.
+ const counts={};
+ for(const a of assignments){
+  if(!a.teacher){
+   const k=[a.row.AnneeScolaire,a.row.Ecole,levels(a.row.Niveau).join("+")].map(norm).join("|");
+   counts[k]=(counts[k]||0)+1;
+   a.teacher="Enseignant inconnu "+String.fromCharCode(64+Math.min(counts[k],26));
+   a.source="À compléter";
+  }
+ }
+ const exactCount=assignments.filter(a=>a.source==="Correspondance exacte").length;
+ $("summary").innerHTML="<b>Situation sans problématique particulière — "+exactCount+"</b><br>"+exactCount+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Tous les vœux en attente avec enseignant ont une correspondance exacte.");
+ if(ambiguities.length){showAmbiguity(0)}else showReview();
+}
+function showAmbiguity(i){
+ current=i;$("review").classList.add("hidden");$("ambiguity").classList.remove("hidden");
+ const a=ambiguities[i];$("ambTitle").textContent="Situation à vérifier — "+(i+1)+" / "+ambiguities.length;
+ $("ambText").textContent="Vœu de "+a.info.teacher+" : "+text(a.wish.Ecole)+", "+levels(a.wish.Niveau).join(" – ")+". Choisissez une classe disponible ou laissez ce vœu sans affectation.";
+ const box=$("ambChoices");box.innerHTML="";
+ const options=assignments.filter(x=>a.candidates.includes(x.row._id)&&!x.teacher.startsWith("Enseignant inconnu")&&!x._reserved);
+ // Candidates are filtered dynamically by prior validated decisions.
+ const available=assignments.filter(x=>
+  a.candidates.some(id=>String(id)===String(x.row._id)) &&
+  x.source!=="Correspondance exacte" &&
+  !ambiguities.some((b,j)=>j!==i && decisions[j]!==undefined && String(decisions[j])===String(x.row._id))
+ );
+ available.forEach(x=>{
+  const label=document.createElement("label"),radio=document.createElement("input");
+  radio.type="radio";radio.name="choice";radio.value=x.row._id;
+  radio.checked=String(decisions[i])===String(x.row._id);
+  label.append(radio,document.createTextNode(" Classe "+text(x.row.RefClasse)+" — "+levels(x.row.Niveau).join(" / ")));
+  box.append(label);
+ });
+ const none=document.createElement("label"),r=document.createElement("input");r.type="radio";r.name="choice";r.value="";r.checked=decisions[i]==="";
+ none.append(r,document.createTextNode(" Ne pas affecter pour le moment"));box.append(none);
+ $("prev").disabled=i===0;$("next").textContent=i===ambiguities.length-1?"Valider et terminer":"Valider et suivant";
+}
+$("prev").onclick=()=>{saveDecision();showAmbiguity(current-1)};
+function saveDecision(){
+ const chosen=document.querySelector('input[name="choice"]:checked');
+ if(!chosen){alert("Choisissez une classe ou « Ne pas affecter ».");return false}
+ decisions[current]=chosen.value;return true;
+}
+$("next").onclick=()=>{if(!saveDecision())return;if(current<ambiguities.length-1)showAmbiguity(current+1);else showReview()};
+$("back").onclick=()=>{if(ambiguities.length)showAmbiguity(ambiguities.length-1);else $("review").classList.add("hidden")};
+function showReview(){
+ // Appliquer les décisions aux lignes en mémoire uniquement.
+ ambiguities.forEach((a,i)=>{
+  const id=decisions[i];if(!id)return;
+  const target=assignments.find(x=>x.row._id===Number(id)||String(x.row._id)===String(id));
+  if(target){target.teacher=a.info.teacher;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.cout=a.info.cout;target.wishId=a.wish._id;target.source="Choix validé";}
+ });
+ $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
+ const exactCount=assignments.filter(a=>a.source==="Correspondance exacte").length;
+ const assignedCount=assignments.filter(a=>a.source==="Correspondance exacte"||a.source==="Choix validé").length;
+ $("summary").innerHTML="<b>Situation sans problématique particulière — "+exactCount+"</b><br>"+exactCount+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées. Affectations réalisées après validation : "+(assignedCount-exactCount)+".":"");
+ $("reviewText").textContent="Prévisualisation avant écriture : Enseignant, CodeParcours, NomParcours, EffectifsClasse, Mail, Telephone et CoutParcours sont repris de Table_voeux pour chaque classe affectée. FusionEffectuee sera cochée dans Table_ecoles pour toutes les classes traitées et dans Table_voeux pour les vœux effectivement affectés. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour les classes comprenant GS, CP ou CE1.";
+ $("rows").innerHTML="";
+ assignments.forEach(a=>{
+  const tr=document.createElement("tr");
+  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.cout,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
+  $("rows").append(tr);
+ });
+ $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
+}
+$("write").onclick=async()=>{
+ if(!confirm("Confirmer la fusion ? Les colonnes prévues seront mises à jour dans Table_ecoles et FusionEffectuee sera cochée dans les deux tables pour les lignes traitées."))return;
+ try{
+  $("write").disabled=true;
+  // Mise à jour limitée aux colonnes prévues, plus le marqueur de fusion.
+  const ids=assignments.map(a=>a.row._id);
+  const values={
+   Enseignant:assignments.map(a=>a.teacher),
+   CodeParcours:assignments.map(a=>a.code),
+   NomParcours:assignments.map(a=>a.name),
+   PasseportMusique:assignments.map(a=>a.passport),
+    EffectifsClasse:assignments.map(a=>a.effectifs),
+    Mail:assignments.map(a=>text(a.mail)),
+    Telephone:assignments.map(a=>text(a.telephone)),
+   CoutParcours:assignments.map(a=>a.cout),
+   FusionEffectuee:assignments.map(()=>true)
+  };
+  for(const col of WRITE){
+   if(!values[col] || values[col].length!==ids.length) throw new Error("Données de mise à jour incomplètes pour la colonne "+col);
+  }
+  const wishIds=[...new Set(assignments.filter(a=>a.wishId!==undefined && a.wishId!==null).map(a=>a.wishId))];
+  const actions=[["BulkUpdateRecord",T_ECOLES,ids,values]];
+  if(wishIds.length) actions.push(["BulkUpdateRecord",T_VOEUX,wishIds,{FusionEffectuee:wishIds.map(()=>true)}]);
+  await grist.docApi.applyUserActions(actions);
+  const updatedCount=ids.length;
+  // Vider les données et décisions de la session terminée.
+  ecoles=null; voeux=null; assignments=[]; ambiguities=[]; decisions={}; current=0; output=[];
+  $("ambiguity").classList.add("hidden");
+  $("review").classList.add("hidden");
+  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+updatedCount+" classes marquées comme fusionnées dans Table_ecoles et "+wishIds.length+" vœux marqués comme fusionnés dans Table_voeux.";
+  $("restartPanel").classList.remove("hidden");
+  setStatus("Fusion terminée. Importez le prochain fichier dans Table_voeux, puis cliquez sur « Faire un nouvel import ».");
+  $("write").disabled=true;
+ }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
+};
+$("restart").onclick=async()=>{
+  $("restart").disabled=true;
+  $("restart").textContent="Lecture des nouvelles données…";
+  try{
+    await loadData();
+  }finally{
+    $("restart").disabled=false;
+    $("restart").textContent="Faire un nouvel import";
+  }
+};
+load();
+</script>
+</body></html>
