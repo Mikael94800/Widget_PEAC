@@ -254,10 +254,10 @@ function showReview(){
   [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.cout,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
   $("rows").append(tr);
  });
- $("write").disabled=Object.keys(decisions).length!==ambiguities.length;
+ $("write").disabled=assignments.length===0||Object.keys(decisions).length!==ambiguities.length;
 }
 $("write").onclick=async()=>{
- if(!confirm("Confirmer l’écriture des huit colonnes prévues dans Table_ecoles ? Cette action modifiera les données."))return;
+ if(!confirm("Confirmer la fusion des classes affichées dans Table_ecoles et cocher FusionEffectuee pour ces classes ? Cette action modifiera les données."))return;
  try{
   $("write").disabled=true;
   // Mise à jour limitée aux huit colonnes prévues.
