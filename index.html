@@ -59,6 +59,7 @@ const $=id=>document.getElementById(id);
 const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
 const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
 const WRITE=["Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours"];
+const FLAG="FusionEffectuee";
 let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
 let output=[];
 function val(col,i){return col && col[i]!==undefined ? col[i] : null}
@@ -129,11 +130,11 @@ async function loadData(){
   console.log("[Module_fusion] lecture Table_voeux");
   voeux=await grist.docApi.fetchTable(T_VOEUX);
 
-  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
+  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse",FLAG]);
   validateColumns(voeux,T_VOEUX,[...F,"Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours"]);
 
   prepare();
-  setStatus("Lecture réussie : "+ecoles.id.length+" classes et "+voeux.id.length+" vœux.");
+  setStatus(readSummary());
  }catch(e){
   setStatus("ERREUR : "+(e.message||e));
   console.error("[Module_fusion]",e);
@@ -151,14 +152,26 @@ function load(){
   console.error("[Module_fusion]",e);
  }
 }
+function isFlagged(v){return v===true||v===1||v==="1"||norm(v)==="true"||norm(v)==="oui";}
+function allRows(data){return data.id.map((_,i)=>rowFrom(data,i));}
+function schoolYear(r){return text(r.AnneeScolaire).trim()||"(année non renseignée)";}
+function readSummary(){
+ const E=allRows(ecoles),V=allRows(voeux),years=[...new Set([...E.map(schoolYear),...V.map(schoolYear)])].sort();
+ return "Lecture de Table_voeux et Table_ecoles réussie :\n"+years.map(y=>{
+  const ec=E.filter(r=>schoolYear(r)===y),vw=V.filter(r=>schoolYear(r)===y);
+  return "• "+y+" : "+ec.length+" classes et "+vw.length+" vœux";
+ }).join("\n");
+}
 function prepare(){
  ambiguities=[];decisions={};current=0;
- const E=ecoles.id.map((_,i)=>rowFrom(ecoles,i));
- const V=voeux.id.map((_,i)=>rowFrom(voeux,i));
+ const allE=allRows(ecoles),allV=allRows(voeux);
+ // Ne traiter que les classes dont la fusion n'a pas encore été faite.
+ const E=allE.filter(r=>!isFlagged(r[FLAG]));
+ const yearsToProcess=new Set(E.map(schoolYear));
+ const V=allV.filter(w=>yearsToProcess.has(schoolYear(w)));
  assignments=E.map(r=>({row:r,teacher:"",teacherFirst:"",teacherLast:"",code:"",name:"",effectifs:r.EffectifsClasse,mail:r.Mail,telephone:r.Telephone,cout:r.CoutParcours,passport:passport(r),source:""}));
  const used=new Set();
  const wishes=V.filter(w=>teacherOf(w));
- // Étape 1 : affectations exactes, en respectant une ligne de classe par vœu.
  for(const w of wishes){
   const candidates=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&sameLevels(a.row,w));
   if(candidates.length){
@@ -166,12 +179,10 @@ function prepare(){
    Object.assign(a,{teacher:info.teacher,teacherFirst:info.teacherFirst,teacherLast:info.teacherLast,code:info.code,name:info.name,effectifs:info.effectifs,mail:info.mail,telephone:info.telephone,cout:info.cout,source:"Correspondance exacte"});
   }else{
    const candidates2=assignments.filter(a=>!used.has(a.row._id)&&sameBase(a.row,w)&&levelOverlap(a.row,w));
-   ambiguities.push({wish:w, candidates:candidates2.map(a=>a.row._id), selected:null, info:getWishInfo(w)});
+   ambiguities.push({wish:w,candidates:candidates2.map(a=>a.row._id),selected:null,info:getWishInfo(w)});
   }
  }
- // Les choix manuels sont présentés un par un. On ne présélectionne jamais une classe.
  ambiguities=ambiguities.map((a,i)=>({...a,index:i}));
- // Les classes sans enseignant reçoivent une étiquette provisoire par école/niveau.
  const counts={};
  for(const a of assignments){
   if(!a.teacher){
@@ -181,7 +192,12 @@ function prepare(){
    a.source="À compléter";
   }
  }
- $("summary").innerHTML="<b>Situation sans problématique particulière — "+(wishes.length-ambiguities.length)+" / "+wishes.length+"</b><br>"+(wishes.length-ambiguities.length)+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Tous les vœux avec enseignant ont une correspondance exacte.");
+ const doneRows=allE.filter(r=>isFlagged(r[FLAG]));
+ const doneYears=[...new Set(doneRows.map(schoolYear))].sort();
+ const completedSummary=doneYears.length?doneYears.map(y=>y+" : "+doneRows.filter(r=>schoolYear(r)===y).length+" classes").join("<br>"):"Aucune année scolaire marquée comme fusionnée.";
+ const pendingSummary=[...yearsToProcess].sort().map(y=>y+" : "+E.filter(r=>schoolYear(r)===y).length+" classes lues dans Table_ecoles ; "+allV.filter(w=>schoolYear(w)===y).length+" vœux lus dans Table_voeux").join("<br>");
+ const wishesDone=doneRows.filter(r=>text(r.CodeParcours).trim()).length;
+ $("summary").innerHTML="<b>Fusion réalisée</b><br>"+completedSummary+"<br>"+wishesDone+" vœux/parcours déjà inscrits dans Table_ecoles (codes de parcours renseignés).<br><br><b>Fusion à réaliser</b><br>"+(pendingSummary.length?pendingSummary.join("<br>"):"Aucune classe non cochée dans FusionEffectuee.")+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Aucune situation ambiguë détectée pour les classes à traiter.");
  if(ambiguities.length){showAmbiguity(0)}else showReview();
 }
 function showAmbiguity(i){
@@ -225,7 +241,12 @@ function showReview(){
  $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
  const assignedCount=assignments.filter(a=>a.source==="Correspondance exacte"||a.source==="Choix validé").length;
  const wishesCount=assignedCount+ambiguities.length;
- $("summary").innerHTML="<b>Situation sans problématique particulière — "+assignedCount+" / "+wishesCount+"</b><br>"+assignedCount+" vœux et parcours ont été placés dans Table_ecoles, automatiquement ou après validation individuelle."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+" / "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées.":"");
+ const completed=allRows(ecoles).filter(r=>isFlagged(r[FLAG]));
+ const completedYears=[...new Set(completed.map(schoolYear))].sort();
+ const completedText=completedYears.map(y=>y+" : "+completed.filter(r=>schoolYear(r)===y).length+" classes").join("<br>");
+ const pendingYears=[...new Set(assignments.map(a=>schoolYear(a.row)))].sort();
+ const pendingText=pendingYears.map(y=>y+" : "+assignments.filter(a=>schoolYear(a.row)===y).length+" classes, "+allRows(voeux).filter(w=>schoolYear(w)===y).length+" vœux lus").join("<br>");
+ $("summary").innerHTML="<b>Fusion réalisée</b><br>"+completedText+"<br><br><b>Fusion à réaliser</b><br>"+pendingText+"<br><br><b>Vœux affectés</b> : "+assignedCount+" / "+wishesCount+" vœux traités."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+" / "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées.":"");
  $("reviewText").textContent="Prévisualisation avant écriture : Enseignant, CodeParcours, NomParcours, EffectifsClasse, Mail, Telephone et CoutParcours sont repris de Table_voeux pour chaque classe affectée. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour les classes comprenant GS, CP ou CE1.";
  $("rows").innerHTML="";
  assignments.forEach(a=>{
@@ -251,9 +272,10 @@ $("write").onclick=async()=>{
     EffectifsClasse:assignments.map(a=>a.effectifs),
     Mail:assignments.map(a=>text(a.mail)),
     Telephone:assignments.map(a=>text(a.telephone)),
-   CoutParcours:assignments.map(a=>a.cout)
+   CoutParcours:assignments.map(a=>a.cout),
+   FusionEffectuee:assignments.map(()=>true)
   };
-  for(const col of WRITE){
+  for(const col of [...WRITE,FLAG]){
    if(!values[col] || values[col].length!==ids.length) throw new Error("Données de mise à jour incomplètes pour la colonne "+col);
   }
   await grist.docApi.applyUserActions([["BulkUpdateRecord",T_ECOLES,ids,values]]);
