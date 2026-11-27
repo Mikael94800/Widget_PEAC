@@ -247,13 +247,17 @@ function showReview(){
  const pendingYears=[...new Set(assignments.map(a=>schoolYear(a.row)))].sort();
  const pendingText=pendingYears.map(y=>y+" : "+assignments.filter(a=>schoolYear(a.row)===y).length+" classes, "+allRows(voeux).filter(w=>schoolYear(w)===y).length+" vœux lus").join("<br>");
  $("summary").innerHTML="<b>Fusion réalisée</b><br>"+completedText+"<br><br><b>Fusion à réaliser</b><br>"+pendingText+"<br><br><b>Vœux affectés</b> : "+assignedCount+" / "+wishesCount+" vœux traités."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+" / "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées.":"");
- $("reviewText").textContent="Prévisualisation avant écriture : Enseignant, CodeParcours, NomParcours, EffectifsClasse, Mail, Telephone et CoutParcours sont repris de Table_voeux pour chaque classe affectée. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour les classes comprenant GS, CP ou CE1.";
- $("rows").innerHTML="";
- assignments.forEach(a=>{
-  const tr=document.createElement("tr");
-  [a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacher,a.code,a.name,a.effectifs,a.mail,a.telephone,a.cout,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td)});
-  $("rows").append(tr);
- });
+ $("reviewText").textContent="Prévisualisation avant écriture : seuls Classe, École, Niveau, Prénom, Nom, Code, Parcours, Statut et Passeport sont affichés. Les effectifs, coordonnées et coût restent masqués. PasseportMusique sera coché automatiquement pour les classes comprenant GS, CP ou CE1.";
+ const sortState={key:"classe",direction:1};
+ function sortValue(a,key){switch(key){case "classe":return text(a.row.RefClasse);case "ecole":return text(a.row.Ecole);case "niveau":return levels(a.row.Niveau).join(" / ");case "prenom":return a.teacherFirst;case "nom":return a.teacherLast;case "code":return a.code;case "parcours":return a.name;case "statut":return a.source;case "passeport":return a.passport?"Oui":"Non";default:return "";}}
+ function renderPreview(){
+  const list=[...assignments].sort((a,b)=>{const x=sortValue(a,sortState.key),y=sortValue(b,sortState.key);const cmp=String(x).localeCompare(String(y),"fr",{numeric:true,sensitivity:"base"});return cmp*sortState.direction;});
+  $("rows").innerHTML="";
+  list.forEach(a=>{const tr=document.createElement("tr");[a.row.RefClasse,a.row.Ecole,levels(a.row.Niveau).join(" / "),a.teacherFirst,a.teacherLast,a.code,a.name,a.source,a.passport?"Oui":"Non"].forEach(v=>{const td=document.createElement("td");td.textContent=text(v);tr.append(td);});$("rows").append(tr);});
+  document.querySelectorAll("th button[data-sort]").forEach(b=>{const k=b.dataset.sort;b.textContent=b.textContent.replace(/[↑↓↕]/g,"").trim()+" "+(sortState.key===k?(sortState.direction===1?"↑":"↓"):"↕");});
+ }
+ document.querySelectorAll("th button[data-sort]").forEach(b=>b.onclick=()=>{const k=b.dataset.sort;if(sortState.key===k)sortState.direction*=-1;else{sortState.key=k;sortState.direction=1;}renderPreview();});
+ renderPreview();
  $("write").disabled=assignments.length===0||Object.keys(decisions).length!==ambiguities.length;
 }
 $("write").onclick=async()=>{
