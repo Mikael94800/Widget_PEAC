@@ -14,6 +14,7 @@ button.primary{background:#185abc;color:white;border-color:#185abc}button:disabl
 .small{color:#555;font-size:12px}.choices label{display:block;margin:8px 0}
 table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid #ddd;text-align:left;padding:6px;white-space:nowrap}th button{padding:4px 6px;margin:0;background:transparent;border:0;font-weight:700;white-space:nowrap}th button:hover{background:#eef3f8}#rows tr:hover{background:#f5f8fc}
 .hidden{display:none}.warn{color:#9b4b00}.good{color:#176b35}
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999}.confirm-box{background:white;color:#222;width:min(460px,100%);padding:22px;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.25)}.confirm-box h3{margin:0 0 12px}.confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.confirm-actions button{margin:0}
 </style>
 </head>
 <body>
@@ -50,6 +51,14 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
     <button id="back">Revenir aux choix</button>
     <button id="write" class="primary">Confirmer l’écriture dans Table_ecoles</button>
   </div>
+</div>
+<div id="confirmOverlay" class="confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+ <div class="confirm-box">
+  <h3 id="confirmTitle">Fusion PEAC</h3>
+  <p id="confirmMessage">Confirmer l’écriture dans Table_ecoles ?</p>
+  <p class="small">Cette opération modifiera les données des classes affichées et marquera leur fusion comme effectuée.</p>
+  <div class="confirm-actions"><button id="cancelConfirm">Annuler</button><button id="acceptConfirm" class="primary">Confirmer la fusion</button></div>
+ </div>
 </div>
 <div class="panel warn">
  <b>Attention</b> : les dispositifs Ecole&amp;Cinema, Chorale CRR93 et Sensibilisation CHAM/CHAT doivent être saisis manuellement par l’utilisateur. Cette saisie peut conduire à remplacer les libellés provisoires « Enseignant inconnu A », « Enseignant inconnu B », etc., et à modifier les effectifs. Elle ne doit en aucun cas faire évoluer le nombre total de classes.
@@ -260,8 +269,7 @@ function showReview(){
  renderPreview();
  $("write").disabled=assignments.length===0||Object.keys(decisions).length!==ambiguities.length;
 }
-$("write").onclick=async()=>{
- if(!confirm("Confirmer la fusion des classes affichées dans Table_ecoles et cocher FusionEffectuee pour ces classes ? Cette action modifiera les données."))return;
+async function performWrite(){
  try{
   $("write").disabled=true;
   // Mise à jour limitée aux huit colonnes prévues.
@@ -293,7 +301,21 @@ $("write").onclick=async()=>{
   setStatus("Fusion terminée. Importez le prochain fichier dans Table_voeux, puis cliquez sur « Faire un nouvel import ».");
   $("write").disabled=true;
  }catch(e){$("write").disabled=false;alert("Échec de l’écriture : "+(e.message||e));console.error(e)}
+}
+$("write").onclick=()=>{
+ const years=[...new Set(assignments.map(a=>schoolYear(a.row)))].sort();
+ $("confirmTitle").textContent=years.length===1?"Fusion PEAC année "+years[0]:"Fusion PEAC — "+years.join(" et ");
+ $("confirmMessage").textContent="Confirmer l’écriture de "+assignments.length+" classe(s) dans Table_ecoles ?";
+ $("confirmOverlay").classList.remove("hidden");
+ $("acceptConfirm").focus();
 };
+$("cancelConfirm").onclick=()=>{$("confirmOverlay").classList.add("hidden");};
+$("acceptConfirm").onclick=async()=>{
+ $("confirmOverlay").classList.add("hidden");
+ $("write").disabled=true;
+ await performWrite();
+};
+$("confirmOverlay").addEventListener("click",e=>{if(e.target===$("confirmOverlay"))$("confirmOverlay").classList.add("hidden");});
 $("restart").onclick=async()=>{
   $("restart").disabled=true;
   $("restart").textContent="Lecture des nouvelles données…";
