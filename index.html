@@ -58,7 +58,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
 const $=id=>document.getElementById(id);
 const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
 const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
-const WRITE=["Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours"];
+const WRITE=["Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours"];\nconst FLAG="FusionEffectuee";
 let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
 let output=[];
 function val(col,i){return col && col[i]!==undefined ? col[i] : null}
@@ -129,7 +129,7 @@ async function loadData(){
   console.log("[Module_fusion] lecture Table_voeux");
   voeux=await grist.docApi.fetchTable(T_VOEUX);
 
-  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse"]);
+  validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse",FLAG]);
   validateColumns(voeux,T_VOEUX,[...F,"Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours"]);
 
   prepare();
@@ -181,7 +181,7 @@ function prepare(){
    a.source="À compléter";
   }
  }
- $("summary").innerHTML="<b>Situation sans problématique particulière — "+(wishes.length-ambiguities.length)+" / "+wishes.length+"</b><br>"+(wishes.length-ambiguities.length)+" vœux et parcours ont été placés dans Table_ecoles sans intervention."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Tous les vœux avec enseignant ont une correspondance exacte.");
+ const already=allE.filter(r=>isFlagged(r[FLAG]));\n const yearsDone=[...new Set(already.map(schoolYear))].sort();\n const doneRows=already.filter(r=>text(r.CodeParcours).trim()).length;\n const yearStats=[...activeYears].sort().map(y=>({year:y,classes:E.filter(r=>schoolYear(r)===y).length,wishes:V.filter(w=>schoolYear(w)===y).length}));\n const doneText=yearsDone.length?yearsDone.map(y=>y+" : "+already.filter(r=>schoolYear(r)===y).length+" classes déjà fusionnées").join("<br>"):"Aucune année scolaire n’est marquée comme fusionnée.";\n const todoText=yearStats.length?yearStats.map(s=>s.year+" : "+s.classes+" classes à traiter dans Table_ecoles, "+s.wishes+" vœux dans Table_voeux").join("<br>"):"Aucune classe non fusionnée à traiter.";\n $("summary").innerHTML="<b>Fusion déjà réalisée</b><br>"+doneText+"<br>"+doneRows+" vœux/parcours déjà inscrits dans Table_ecoles (comptage des codes parcours renseignés).<br><br><b>Fusion à réaliser</b><br>"+todoText+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Tous les vœux avec enseignant ont une correspondance exacte.");
  if(ambiguities.length){showAmbiguity(0)}else showReview();
 }
 function showAmbiguity(i){
@@ -262,7 +262,7 @@ $("write").onclick=async()=>{
   ecoles=null; voeux=null; assignments=[]; ambiguities=[]; decisions={}; current=0; output=[];
   $("ambiguity").classList.add("hidden");
   $("review").classList.add("hidden");
-  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+updatedCount+" lignes mises à jour dans Table_ecoles.";
+  $("summary").innerHTML="<b>Fusion terminée.</b><br>"+updatedCount+" classes mises à jour et marquées comme fusionnées dans Table_ecoles.";
   $("restartPanel").classList.remove("hidden");
   setStatus("Fusion terminée. Importez le prochain fichier dans Table_voeux, puis cliquez sur « Faire un nouvel import ».");
   $("write").disabled=true;
