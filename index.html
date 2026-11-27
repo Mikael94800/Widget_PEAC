@@ -309,13 +309,26 @@ $("write").onclick=()=>{
  $("confirmOverlay").classList.remove("hidden");
  $("acceptConfirm").focus();
 };
-$("cancelConfirm").onclick=()=>{$("confirmOverlay").classList.add("hidden");};
-$("acceptConfirm").onclick=async()=>{
+function closeConfirm(){
  $("confirmOverlay").classList.add("hidden");
+}
+$("cancelConfirm").type="button";
+$("cancelConfirm").addEventListener("click",e=>{
+ e.preventDefault();
+ e.stopPropagation();
+ closeConfirm();
+});
+$("acceptConfirm").type="button";
+$("acceptConfirm").addEventListener("click",async e=>{
+ e.preventDefault();
+ e.stopPropagation();
+ closeConfirm();
  $("write").disabled=true;
  await performWrite();
-};
-$("confirmOverlay").addEventListener("click",e=>{if(e.target===$("confirmOverlay"))$("confirmOverlay").classList.add("hidden");});
+});
+$("confirmOverlay").addEventListener("click",e=>{
+ if(e.target===$("confirmOverlay"))closeConfirm();
+});
 $("restart").onclick=async()=>{
   $("restart").disabled=true;
   $("restart").textContent="Lecture des nouvelles données…";
