@@ -221,8 +221,8 @@ function showReview(){
   if(target){target.teacher=a.info.teacher;target.teacherFirst=a.info.teacherFirst;target.teacherLast=a.info.teacherLast;target.code=a.info.code;target.name=a.info.name;target.effectifs=a.info.effectifs;target.mail=a.info.mail;target.telephone=a.info.telephone;target.cout=a.info.cout;target.source="Choix validé";}
  });
  $("ambiguity").classList.add("hidden");$("review").classList.remove("hidden");
- const wishesCount=assignedCount+ambiguities.length;
  const assignedCount=assignments.filter(a=>a.source==="Correspondance exacte"||a.source==="Choix validé").length;
+ const wishesCount=assignedCount+ambiguities.length;
  $("summary").innerHTML="<b>Situation sans problématique particulière — "+assignedCount+" / "+wishesCount+"</b><br>"+assignedCount+" vœux et parcours ont été placés dans Table_ecoles, automatiquement ou après validation individuelle."+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+" / "+ambiguities.length+"</b><br>Toutes les situations signalées ont maintenant été examinées.":"");
  $("reviewText").textContent="Prévisualisation avant écriture : Enseignant, CodeParcours, NomParcours, EffectifsClasse, Mail, Telephone et CoutParcours sont repris de Table_voeux pour chaque classe affectée. Pour les classes sans vœu affecté, les valeurs déjà présentes dans Table_ecoles sont conservées. PasseportMusique sera coché pour les classes comprenant GS, CP ou CE1.";
  $("rows").innerHTML="";
