@@ -67,7 +67,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
 const $=id=>document.getElementById(id);
 const T_ECOLES="Table_ecoles", T_VOEUX="Table_voeux";
 const F=["AnneeScolaire","Cycle","Ecole","Niveau"];
-const WRITE=["Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours"];
+const WRITE=["NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","PasseportMusique","EffectifsClasse","Mail","Telephone","CoutParcours"];
 const FLAG="FusionEffectuee";
 let ecoles, voeux, assignments=[], ambiguities=[], decisions={}, current=0;
 let output=[];
@@ -97,7 +97,7 @@ function sameBase(a,b){return F.slice(0,3).every(f=>keyValue(a,f)===keyValue(b,f
 function sameLevels(a,b){const x=levels(a.Niveau).map(norm).sort(),y=levels(b.Niveau).map(norm).sort();return x.length===y.length&&x.every((v,i)=>v===y[i])}
 function levelOverlap(a,b){const x=levels(a.Niveau).map(norm),y=levels(b.Niveau).map(norm);return x.some(v=>y.includes(v))}
 function splitLegacyName(v){let s=text(v).trim().replace(/\s+/g," ");if(!s)return{first:"",last:""};if(/^enseignant inconnu\s+[a-z0-9]+$/i.test(s))return{first:"",last:s};let p=s.split(" "),isUpper=x=>x===x.toLocaleUpperCase("fr")&&/[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ]/.test(x),n=p.length;while(n>0&&isUpper(p[n-1]))n--;if(n>0&&n<p.length)return{first:p.slice(0,n).join(" "),last:p.slice(n).join(" ")};if(p.length>1)return{first:p[0],last:p.slice(1).join(" ")};return{first:"",last:s}}
-function teacherParts(r){let first=text(r.PrenomEnseignant).trim(),last=text(r.NomEnseignant).trim();if(first||last)return{first,last};return splitLegacyName(r.Enseignant)}
+function teacherParts(r){return{first:text(r.PrenomEnseignant).trim(),last:text(r.NomEnseignant).trim()}}
 function teacherOf(r){const p=teacherParts(r);return [p.first,p.last].filter(Boolean).join(" ").trim()}
 function numericOrNull(v, field){
  if(v===null || v===undefined || v==="") return null;
@@ -140,7 +140,7 @@ async function loadData(){
   voeux=await grist.docApi.fetchTable(T_VOEUX);
 
   validateColumns(ecoles,T_ECOLES,[...F,...WRITE,"RefClasse",FLAG]);
-  validateColumns(voeux,T_VOEUX,[...F,"Enseignant","NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours"]);
+  validateColumns(voeux,T_VOEUX,[...F,"NomEnseignant","PrenomEnseignant","CodeParcours","NomParcours","EffectifsClasse","Mail","Telephone","CoutParcours"]);
 
   prepare();
   setStatus(readSummary());
@@ -275,7 +275,6 @@ async function performWrite(){
   // Mise à jour limitée aux huit colonnes prévues.
   const ids=assignments.map(a=>a.row._id);
   const values={
-   Enseignant:assignments.map(a=>a.teacher),
    NomEnseignant:assignments.map(a=>a.teacherLast),
    PrenomEnseignant:assignments.map(a=>a.teacherFirst),
    CodeParcours:assignments.map(a=>a.code),
