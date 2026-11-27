@@ -197,7 +197,7 @@ function prepare(){
  const completedSummary=doneYears.length?doneYears.map(y=>y+" : "+doneRows.filter(r=>schoolYear(r)===y).length+" classes").join("<br>"):"Aucune année scolaire marquée comme fusionnée.";
  const pendingSummary=[...yearsToProcess].sort().map(y=>y+" : "+E.filter(r=>schoolYear(r)===y).length+" classes lues dans Table_ecoles ; "+allV.filter(w=>schoolYear(w)===y).length+" vœux lus dans Table_voeux").join("<br>");
  const wishesDone=doneRows.filter(r=>text(r.CodeParcours).trim()).length;
- $("summary").innerHTML="<b>Fusion réalisée</b><br>"+completedSummary+"<br>"+wishesDone+" vœux/parcours déjà inscrits dans Table_ecoles (codes de parcours renseignés).<br><br><b>Fusion à réaliser</b><br>"+(pendingSummary.length?pendingSummary.join("<br>"):"Aucune classe non cochée dans FusionEffectuee.")+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Aucune situation ambiguë détectée pour les classes à traiter.");
+ $("summary").innerHTML="<b>Fusion réalisée</b><br>"+completedSummary+"<br>"+wishesDone+" vœux/parcours déjà inscrits dans Table_ecoles (codes de parcours renseignés).<br><br><b>Fusion à réaliser</b><br>"+(pendingSummary.length?pendingSummary:"Aucune classe non cochée dans FusionEffectuee.")+(ambiguities.length?"<br><br><b>Situations à vérifier — "+ambiguities.length+"</b><br>Ces vœux nécessitent une validation individuelle.":"<br><br>Aucune situation ambiguë détectée pour les classes à traiter.");
  if(ambiguities.length){showAmbiguity(0)}else showReview();
 }
 function showAmbiguity(i){
